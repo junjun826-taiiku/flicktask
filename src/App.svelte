@@ -68,6 +68,11 @@
       <span>タスクなし</span>
     </div>
   {/if}
+  <footer class="legal" data-testid="legal-links">
+    <span>Flick — メモしてフリックで進めるタスク管理</span>
+    <a href="/privacy">プライバシーポリシー</a>
+    <a href="/terms">利用規約</a>
+  </footer>
 </div>
 
 <div class="toasts" aria-live="polite">

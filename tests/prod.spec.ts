@@ -45,3 +45,15 @@ test('production: OAuth callback rejects a forged state', async ({ request }) =>
   expect(res.status()).toBe(302);
   expect(res.headers()['location']).toContain('login=failed');
 });
+
+test('production: privacy policy and terms are public and linked from home', async ({ page }) => {
+  await page.goto('/');
+  const links = page.getByTestId('legal-links');
+  await expect(links.getByRole('link', { name: 'プライバシーポリシー' })).toHaveAttribute('href', '/privacy');
+  await expect(links.getByRole('link', { name: '利用規約' })).toHaveAttribute('href', '/terms');
+  for (const [path, heading] of [['/privacy', 'プライバシーポリシー'], ['/terms', '利用規約']]) {
+    const res = await page.goto(path);
+    expect(res!.status()).toBe(200);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(heading);
+  }
+});

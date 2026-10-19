@@ -307,3 +307,13 @@ test('Workers AI splits a memo into tasks', async ({ page }) => {
   await expect(page.getByTestId('task-card')).toHaveCount(n - 1);
   await expect(memo(page)).toHaveValue('');
 });
+
+test('privacy policy and terms pages are served', async ({ page }) => {
+  for (const [path, heading] of [['/privacy', 'プライバシーポリシー'], ['/terms', '利用規約']]) {
+    const res = await page.goto(path);
+    expect(res!.status()).toBe(200);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(heading);
+  }
+  await page.goto('/');
+  await expect(page.getByTestId('legal-links').getByRole('link', { name: 'プライバシーポリシー' })).toBeVisible();
+});
