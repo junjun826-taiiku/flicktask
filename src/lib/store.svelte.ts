@@ -17,6 +17,11 @@ export type Task = {
   plan_start: string | null;
   plan_end: string | null;
 };
+export type AiSuggestion = { title: string; due_date: string | null; due_time: string | null };
+const localToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 export type Details = Pick<Task, 'title' | 'note' | 'due_date' | 'due_time' | 'plan_date' | 'plan_start' | 'plan_end' | 'status'>;
 
 const EMPTY_DETAILS = { note: '', due_date: null, due_time: null, plan_date: null, plan_start: null, plan_end: null };
@@ -203,14 +208,15 @@ class Store {
     this.#persist();
   }
 
-  async aiSplit(text: string): Promise<string[]> {
+  /** AI split. Sends the local date so "明日" / "金曜" resolve in the user's time zone. */
+  async aiSplit(text: string): Promise<AiSuggestion[]> {
     const res = await fetch('/api/ai/split', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, today: localToday() }),
     });
     if (!res.ok) throw new Error(String(res.status));
-    return ((await res.json()) as { tasks: string[] }).tasks;
+    return ((await res.json()) as { tasks: AiSuggestion[] }).tasks;
   }
 }
 

@@ -245,3 +245,127 @@ test('API rejects malformed dates and times @local', async ({ page }) => {
   expect((await bad({ plan_date: '2026-10-19', plan_start: '25:00' })).status()).toBe(400);
   expect((await bad({ due_date: '2026-10-19', due_time: '09:30' })).status()).toBe(200);
 });
+
+// ---------- AI picks up deadlines ----------
+
+test('Workers AI picks up deadlines from the memo @local', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto(`/auth/dev-login?name=aidue-${uid()}`);
+  await ready(page);
+  await memo(page).fill('明日の17時までに部長に見積もりを送る。名刺も補充する');
+  await page.getByTestId('ai-button').click();
+  const panel = page.getByTestId('ai-suggestions');
+  await expect(panel).toBeVisible({ timeout: 60_000 });
+  await expect(panel.getByTestId('ai-due').first()).toContainText('明日 17:00');
+  await page.getByTestId('ai-accept').click();
+  await expect(page.getByTestId('task-card').getByTestId('chip-due').filter({ hasText: '明日 17:00' })).toHaveCount(1);
+});
+
+test('an AI-suggested deadline can be dropped before adding @local', async ({ page }) => {
+  const tomorrow = plusDays(1);
+  await page.route('**/api/ai/split', (route) =>
+    route.fulfill({
+      json: {
+        tasks: [
+          { title: '見積もりを送る', due_date: tomorrow, due_time: '17:00' },
+          { title: '牛乳を買う', due_date: tomorrow, due_time: null },
+        ],
+      },
+    }),
+  );
+  await page.goto(`/auth/dev-login?name=aimock-${uid()}`);
+  await ready(page);
+  await memo(page).fill('明日17時までに見積もり、牛乳');
+  await page.getByTestId('ai-button').click();
+  const panel = page.getByTestId('ai-suggestions');
+  await expect(panel.getByTestId('ai-due')).toHaveCount(2);
+  await panel.getByTestId('ai-due-remove').nth(1).click();
+  await expect(panel.getByTestId('ai-due')).toHaveCount(1);
+  await page.getByTestId('ai-accept').click();
+  await expect(card(page, '見積もりを送る').getByTestId('chip-due')).toContainText('明日 17:00');
+  await expect(card(page, '牛乳を買う')).toBeVisible();
+  await expect(card(page, '牛乳を買う').getByTestId('chip-due')).toHaveCount(0);
+});
+
+// ---------- drag blocks in the day view ----------
+
+async function blockOnDay(page: Page, day: string, title: string, start: string, end: string) {
+  await page.goto('/');
+  await ready(page);
+  await add(page, title);
+  await detail(page, title, { plan: [day, start, end] });
+  await page.goto(`/calendar/${day}`);
+  await ready(page);
+  const b = page.getByTestId('block').filter({ hasText: title });
+  await expect(b).toBeVisible();
+  await page.waitForTimeout(500); // entrance animation
+  return b;
+}
+
+test('drag a block to move it (snaps to 15 min) and it is saved', async ({ page }, info) => {
+  test.skip(info.project.name === 'mobile', 'mouse drag; touch is covered separately');
+  const day = plusDays(3);
+  const b = await blockOnDay(page, day, 'ドラッグ移動', '10:00', '11:00');
+  const box = (await b.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + 15);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + 15 + 30, { steps: 4 });
+  await expect(page.getByTestId('drag-time')).toBeVisible();
+  await page.mouse.move(box.x + box.width / 2, box.y + 15 + 2 * 56 + 3, { steps: 6 }); // +2h (+3px → snaps)
+  await page.mouse.up();
+  await expect(b).toContainText('12:00–13:00');
+  // a drag must not also open the sheet
+  await expect(page.getByTestId('sheet')).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByTestId('block').filter({ hasText: 'ドラッグ移動' })).toContainText('12:00–13:00');
+});
+
+test('drag the bottom edge to change the end time', async ({ page }, info) => {
+  test.skip(info.project.name === 'mobile', 'mouse drag; touch is covered separately');
+  const day = plusDays(4);
+  const b = await blockOnDay(page, day, 'ドラッグ伸縮', '14:00', '15:00');
+  const handle = b.getByTestId('block-resize');
+  const box = (await handle.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 42, { steps: 6 }); // +45 min
+  await page.mouse.up();
+  await expect(b).toContainText('14:00–15:45');
+  await page.mouse.move(box.x + box.width / 2, box.y + 42 + box.height / 2);
+  // can't shrink below 15 minutes
+  const h2 = (await handle.boundingBox())!;
+  await page.mouse.move(h2.x + h2.width / 2, h2.y + h2.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(h2.x + h2.width / 2, h2.y - 4 * 56, { steps: 6 });
+  await page.mouse.up();
+  await expect(b).toContainText('14:00–14:15');
+});
+
+test('touch: press and hold drags a block, a quick swipe just scrolls', async ({ page }, info) => {
+  test.skip(info.project.name !== 'mobile');
+  const day = plusDays(5);
+  const b = await blockOnDay(page, day, 'タッチ移動', '09:00', '10:00');
+  const cdp = await page.context().newCDPSession(page);
+  const touch = (type: string, x?: number, y?: number) =>
+    cdp.send('Input.dispatchTouchEvent', { type, touchPoints: x === undefined ? [] : [{ x, y }] } as any);
+
+  // quick swipe over the block: no change
+  let box = (await b.boundingBox())!;
+  let x = box.x + box.width / 2;
+  let y = box.y + 15;
+  await touch('touchStart', x, y);
+  for (let i = 1; i <= 6; i++) await touch('touchMove', x, y + i * 15); // finger down: earlier hours, block stays on screen
+  await touch('touchEnd');
+  await page.waitForTimeout(1200); // let the fling scroll come to rest
+  await expect(b).toContainText('09:00–10:00');
+
+  // hold, then drag down 1h
+  box = (await b.boundingBox())!;
+  x = box.x + box.width / 2;
+  y = box.y + 15;
+  await touch('touchStart', x, y);
+  await page.waitForTimeout(450);
+  for (let i = 1; i <= 8; i++) await touch('touchMove', x, y + (i * 57) / 8);
+  await touch('touchEnd');
+  await expect(b).toContainText('10:00–11:00');
+});

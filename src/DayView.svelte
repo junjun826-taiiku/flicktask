@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { fly, scale } from 'svelte/transition';
   import { backOut, cubicOut } from 'svelte/easing';
   import { store, STATUS_LABEL } from './lib/store.svelte';
   import { router } from './lib/router.svelte';
   import { sheet } from './lib/sheet.svelte';
   import { addDays, dayLabel, fromMin, nowMin, today } from './lib/dates';
+  import { vibrate } from './lib/motion';
+  import type { PlanBlock } from './lib/calendar';
   import { allDay, layoutBlocks, timedDeadlines } from './lib/calendar';
   import { useSwipe } from './lib/swipe';
 
@@ -27,16 +29,111 @@
     return () => clearInterval(id);
   });
 
-  // Scroll to "now" (today) or the first thing on the day, else 8:00.
+  // Once a press-and-hold has turned into a drag, stop the timeline from scrolling under the finger.
+  // This listener has to exist before the touch starts: Chrome decides at touchstart whether
+  // touchmove can be cancelled, so adding it mid-gesture would be too late.
+  $effect(() => {
+    const el = scroller;
+    if (!el) return;
+    const stop = (e: TouchEvent) => drag?.active && e.cancelable && e.preventDefault();
+    el.addEventListener('touchmove', stop, { passive: false });
+    return () => el.removeEventListener('touchmove', stop);
+  });
+
+  // Scroll to "now" (today) or the first thing on the day, else 8:00 — only when the date changes,
+  // not whenever a task changes (e.g. right after dragging a block).
   $effect(() => {
     date;
-    tick().then(() => {
+    untrack(() => tick().then(() => {
       if (!scroller) return;
       const first = Math.min(...blocks.map((b) => b.start), ...dues.map((d) => d.at), Infinity);
       const target = isToday ? now - 90 : Number.isFinite(first) ? first - 45 : 8 * 60;
       scroller.scrollTo({ top: Math.max(0, (target / 60) * H), behavior: 'instant' as ScrollBehavior });
-    });
+    }));
   });
+
+  // ---------- drag a block to move it, or its bottom edge to resize ----------
+  // Mouse: starts after a few px of movement. Touch/pen: press and hold (like Google Calendar),
+  // so an ordinary swipe over a block still scrolls the timeline.
+  type Drag = { id: string; mode: 'move' | 'resize'; y0: number; s0: number; e0: number; start: number; end: number; active: boolean };
+  let drag = $state<Drag | null>(null);
+  let holdTimer: ReturnType<typeof setTimeout> | undefined;
+  let justDragged = false;
+  const SNAP = 15;
+  const snap = (m: number) => Math.round(m / SNAP) * SNAP;
+
+  function press(e: PointerEvent, b: PlanBlock, mode: Drag['mode']) {
+    if (e.button !== 0) return;
+    e.stopPropagation(); // keep the day-swipe handler out of it
+    drag = { id: b.task.id, mode, y0: e.clientY, s0: b.start, e0: b.end, start: b.start, end: b.end, active: false };
+    const x0 = e.clientX;
+    if (e.pointerType !== 'mouse') {
+      holdTimer = setTimeout(() => {
+        if (!drag) return;
+        drag.active = true;
+        vibrate(12);
+      }, 300);
+    }
+    const move = (ev: PointerEvent) => {
+      if (!drag) return;
+      const dy = ev.clientY - drag.y0;
+      if (!drag.active) {
+        if (ev.pointerType === 'mouse' && Math.abs(dy) > 4) drag.active = true;
+        else if (Math.hypot(dy, ev.clientX - x0) > 8) return end(); // finger moved first: it's a scroll
+        else return;
+      }
+      autoScroll(ev.clientY);
+      const delta = snap(((dy + scrolled) / H) * 60);
+      if (drag.mode === 'move') {
+        const len = drag.e0 - drag.s0;
+        drag.start = Math.max(0, Math.min(24 * 60 - len, drag.s0 + delta));
+        drag.end = drag.start + len;
+      } else {
+        drag.end = Math.max(drag.s0 + SNAP, Math.min(24 * 60, drag.e0 + delta));
+      }
+    };
+    const up = () => {
+      if (drag?.active && (drag.start !== drag.s0 || drag.end !== drag.e0)) {
+        store.update(drag.id, { plan_start: fromMin(drag.start), plan_end: fromMin(Math.min(drag.end, 24 * 60 - 1)) });
+        vibrate(8);
+      }
+      if (drag?.active) {
+        justDragged = true;
+        setTimeout(() => (justDragged = false), 0);
+      }
+      end();
+    };
+    const end = () => {
+      clearTimeout(holdTimer);
+      cancelAnimationFrame(scrollRaf);
+      removeEventListener('pointermove', move);
+      removeEventListener('pointerup', up);
+      removeEventListener('pointercancel', end);
+      drag = null;
+      scrolled = 0;
+    };
+    let scrolled = 0;
+    let scrollRaf = 0;
+    const autoScroll = (y: number) => {
+      cancelAnimationFrame(scrollRaf);
+      const r = scroller!.getBoundingClientRect();
+      const v = y < r.top + 40 ? -8 : y > r.bottom - 40 ? 8 : 0;
+      if (!v) return;
+      const step = () => {
+        const before = scroller!.scrollTop;
+        scroller!.scrollTop += v;
+        scrolled += scroller!.scrollTop - before;
+        scrollRaf = requestAnimationFrame(step);
+      };
+      scrollRaf = requestAnimationFrame(step);
+    };
+    addEventListener('pointermove', move);
+    addEventListener('pointerup', up);
+    addEventListener('pointercancel', end);
+  }
+
+  /** Position for a block, following the drag while it is being moved. */
+  const pos = (b: PlanBlock) => (drag?.active && drag.id === b.task.id ? { start: drag.start, end: drag.end } : b);
 
   function createAt(e: MouseEvent) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -91,17 +188,26 @@
         <div class="lanes" onclick={createAt} data-testid="lanes">
           <!-- やる時間 = filled blocks -->
           {#each blocks as b, i (b.task.id)}
+            {@const p = pos(b)}
+            {@const dragging = drag?.active && drag.id === b.task.id}
             <button
               class="block"
+              class:dragging
               data-status={b.task.status}
-              style="top:{(b.start / 60) * H}px; height:{Math.max(((b.end - b.start) / 60) * H - 2, 22)}px; left:calc({(b.col / b.cols) * 100}% + 2px); width:calc({100 / b.cols}% - 4px)"
-              onclick={(e) => (e.stopPropagation(), sheet.edit(b.task.id))}
+              style="top:{(p.start / 60) * H}px; height:{Math.max(((p.end - p.start) / 60) * H - 2, 22)}px; left:calc({(b.col / b.cols) * 100}% + 2px); width:calc({100 / b.cols}% - 4px)"
+              onpointerdown={(e) => press(e, b, 'move')}
+              onclick={(e) => (e.stopPropagation(), !justDragged && sheet.edit(b.task.id))}
               in:scale={{ start: 0.85, duration: 420, delay: i * 40, easing: backOut }}
               aria-label="{b.task.title} {b.task.plan_start}–{b.task.plan_end ?? ''}（{STATUS_LABEL[b.task.status]}）"
               data-testid="block"
             >
               <strong>{b.task.title}</strong>
-              <span>{b.task.plan_start}{b.task.plan_end ? `–${b.task.plan_end}` : ''}</span>
+              <span>{dragging ? `${fromMin(p.start)}–${fromMin(Math.min(p.end, 1439))}` : `${b.task.plan_start}${b.task.plan_end ? `–${b.task.plan_end}` : ''}`}</span>
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <span class="resize" onpointerdown={(e) => press(e, b, 'resize')} aria-hidden="true" data-testid="block-resize"></span>
+              {#if dragging}
+                <span class="drag-time" in:scale={{ start: 0.7, duration: 200, easing: backOut }} data-testid="drag-time">{fromMin(p.start)}</span>
+              {/if}
             </button>
           {/each}
 

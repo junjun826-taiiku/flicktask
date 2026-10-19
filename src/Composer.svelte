@@ -4,13 +4,15 @@
   import { store } from './lib/store.svelte';
   import { toasts } from './lib/toast.svelte';
   import { vibrate } from './lib/motion';
+  import { shortLabel } from './lib/dates';
+  import type { AiSuggestion } from './lib/store.svelte';
 
   let host: HTMLDivElement;
   let el: HTMLTextAreaElement | null = null;
   let text = $state('');
   let thinking = $state(false);
   let pulse = $state(0);
-  let suggestions = $state<{ title: string; on: boolean }[] | null>(null);
+  let suggestions = $state<(AiSuggestion & { on: boolean })[] | null>(null);
 
   /** Take over the boot skeleton's textarea so nothing typed before load is lost (value, caret, focus). */
   export function adopt() {
@@ -71,7 +73,7 @@
     try {
       const tasks = await store.aiSplit(text);
       if (!tasks.length) toasts.show('タスクが見つかりませんでした');
-      else suggestions = tasks.map((title) => ({ title, on: true }));
+      else suggestions = tasks.map((t) => ({ ...t, on: true }));
     } catch {
       toasts.show('AIに接続できませんでした');
     } finally {
@@ -80,12 +82,14 @@
   }
 
   function acceptSuggestions() {
-    const picked = suggestions!.filter((s) => s.on).map((s) => s.title);
+    const picked = $state.snapshot(suggestions!).filter((s) => s.on);
     suggestions = null;
     setText('');
     const base = Date.now();
     // stagger so each card drops in one after another (last one on top)
-    picked.reverse().forEach((t, i) => setTimeout(() => store.add(t, base + i), i * 90));
+    picked
+      .reverse()
+      .forEach(({ title, due_date, due_time }, i) => setTimeout(() => store.add(title, base + i, { due_date, due_time }), i * 90));
     vibrate(12);
   }
 </script>
@@ -128,6 +132,13 @@
               </span>
               {s.title}
             </button>
+            {#if s.due_date}
+              <span class="chip due-chip ai-due" class:off={!s.on} data-testid="ai-due" in:scale={{ start: 0.6, duration: 320, delay: 120 + i * 60, easing: backOut }}>
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 14V2.5M4 2.5h7.5L10 5.2l1.5 2.8H4" /></svg>
+                {shortLabel(s.due_date, s.due_time)}
+                <button class="ai-due-x" onclick={() => ((s.due_date = null), (s.due_time = null))} aria-label="期限を外す" data-testid="ai-due-remove">×</button>
+              </span>
+            {/if}
           </li>
         {/each}
       </ul>

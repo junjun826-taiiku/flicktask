@@ -298,7 +298,7 @@ test('Workers AI splits a memo into tasks', async ({ page }) => {
   await expect(page.getByTestId('composer')).toHaveClass(/thinking/);
   const panel = page.getByTestId('ai-suggestions');
   await expect(panel).toBeVisible({ timeout: 60_000 });
-  const chips = panel.locator('.chip');
+  const chips = panel.locator('button.chip');
   expect(await chips.count()).toBeGreaterThanOrEqual(2);
   const n = await chips.count();
   await chips.first().click(); // deselect one
