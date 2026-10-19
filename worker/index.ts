@@ -227,6 +227,11 @@ app.post('/api/ai/split', async (c) => {
   return c.json({ tasks });
 });
 
+// Google Search Console ownership file (needed to list the domain as an OAuth authorized domain).
+// Served by the Worker because static assets would redirect the .html path to an extensionless URL.
+const SITE_VERIFICATION = 'googlefa52df59a4a2a0d4.html';
+app.get(`/${SITE_VERIFICATION}`, (c) => c.html(`google-site-verification: ${SITE_VERIFICATION}`));
+
 app.all('/api/*', (c) => c.json({ error: 'not found' }, 404));
 
 export default app;

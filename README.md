@@ -58,5 +58,9 @@ npm run deploy
 Google Cloud Console の OAuth クライアント（ウェブアプリケーション）に、承認済みのリダイレクト URI として
 `https://flicktask.junjun-tama.workers.dev/auth/callback` を登録してください。
 
-OAuth 同意画面は現在「テスト中」です。ログインできるのは Google Auth Platform →「対象」でテストユーザーに追加したアカウント（最大100人）のみです。
-誰でもログインできる本番公開にするには、ホームページ・プライバシーポリシーの URL と、所有確認済みの承認済みドメイン（独自ドメイン推奨）が必要です。
+OAuth 同意画面は「本番環境」で公開しており、どの Google アカウントでもログインできます（スコープは `openid email profile` のみ）。
+独自ドメインは使わず、`workers.dev` が Public Suffix List に載っていることを利用して `junjun-tama.workers.dev` を承認済みドメインにしています。
+
+- 所有確認: Google Search Console の URL プレフィックス プロパティ `https://flicktask.junjun-tama.workers.dev/` を HTML ファイルで確認。
+  確認ファイル `/googlefa52df59a4a2a0d4.html` は Worker が返します（静的アセットだと `.html` なしの URL へリダイレクトされるため）。消すと確認が外れます。
+- ブランディング: ホームページ `/`、プライバシーポリシー [`/privacy`](public/privacy.html)、利用規約 [`/terms`](public/terms.html)。
