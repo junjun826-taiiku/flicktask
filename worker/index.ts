@@ -53,7 +53,10 @@ async function upsertUser(db: D1Database, u: User) {
 
 // ---------- auth ----------
 app.get('/auth/google', async (c) => {
-  if (!c.env.GOOGLE_CLIENT_ID) return c.text('Google OAuth is not configured', 500);
+  // Guard against a misconfigured secret (e.g. the client secret pasted into GOOGLE_CLIENT_ID),
+  // which would otherwise be leaked in the redirect URL.
+  if (!c.env.GOOGLE_CLIENT_ID?.endsWith('.apps.googleusercontent.com'))
+    return c.text('Google OAuth is not configured', 500);
   const state = randomToken(16);
   const verifier = randomToken(32);
   const opts = { httpOnly: true, secure: isHttps(c.req.url), sameSite: 'Lax' as const, path: '/auth', maxAge: 600 };
