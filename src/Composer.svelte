@@ -6,6 +6,7 @@
   import { vibrate } from './lib/motion';
   import { shortLabel } from './lib/dates';
   import type { AiSuggestion } from './lib/store.svelte';
+  import { stripBullet } from './lib/bullets';
 
   let host: HTMLDivElement;
   let el: HTMLTextAreaElement | null = null;
@@ -13,6 +14,8 @@
   let thinking = $state(false);
   let pulse = $state(0);
   let suggestions = $state<(AiSuggestion & { on: boolean })[] | null>(null);
+  let recovered = $state(0);
+  let rest = $state<string[]>([]);
 
   /** Take over the boot skeleton's textarea so nothing typed before load is lost (value, caret, focus). */
   export function adopt() {
@@ -53,10 +56,12 @@
   }
 
   function submit() {
-    const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+    // one task per line, list markers (・ - 1. ① [ ] …) removed
+    const lines = text.split('\n').map(stripBullet).filter(Boolean);
     if (!lines.length) return;
-    // newest line ends up on top
-    lines.forEach((l, i) => store.add(l, Date.now() + i));
+    // keep the memo's order: the first line ends up on top
+    const base = Date.now();
+    lines.forEach((l, i) => store.add(l, base + lines.length - 1 - i));
     setText('');
     pulse++;
     vibrate(8);
@@ -71,9 +76,13 @@
     }
     thinking = true;
     try {
-      const tasks = await store.aiSplit(text);
-      if (!tasks.length) toasts.show('タスクが見つかりませんでした');
-      else suggestions = tasks.map((t) => ({ ...t, on: true }));
+      const r = await store.aiSplit(text);
+      if (!r.tasks.length) toasts.show('タスクが見つかりませんでした');
+      else {
+        suggestions = r.tasks.map((t) => ({ ...t, on: true }));
+        recovered = r.recovered;
+        rest = r.rest;
+      }
     } catch {
       toasts.show('AIに接続できませんでした');
     } finally {
@@ -84,7 +93,10 @@
   function acceptSuggestions() {
     const picked = $state.snapshot(suggestions!).filter((s) => s.on);
     suggestions = null;
-    setText('');
+    // anything past the 30-task cap goes back into the memo box, ready for another pass
+    setText(rest.map((t) => `・${t}`).join('\n'));
+    if (rest.length) toasts.show(`残り${rest.length}件をメモ欄に戻しました`);
+    rest = [];
     const base = Date.now();
     // stagger so each card drops in one after another (last one on top)
     picked
@@ -126,7 +138,7 @@
       <ul>
         {#each suggestions as s, i}
           <li in:fly={{ y: 10, delay: i * 60, duration: 420, easing: backOut }}>
-            <button class="chip" class:off={!s.on} onclick={() => (s.on = !s.on)} aria-pressed={s.on}>
+            <button class="chip" class:off={!s.on} class:recovered={s.recovered} onclick={() => (s.on = !s.on)} aria-pressed={s.on}>
               <span class="tick" aria-hidden="true">
                 {#if s.on}<svg viewBox="0 0 16 16" in:scale={{ duration: 260, easing: backOut }}><path d="M3.5 8.5l3 3 6-7" /></svg>{/if}
               </span>
@@ -142,8 +154,18 @@
           </li>
         {/each}
       </ul>
+      {#if recovered || rest.length}
+        <div class="suggest-notes" in:fly={{ y: 6, duration: 320, delay: 200 }}>
+          {#if recovered}
+            <p data-testid="ai-recovered">AIが拾えなかった{recovered}件を、そのまま候補に入れました</p>
+          {/if}
+          {#if rest.length}
+            <p data-testid="ai-overflow">一度に分解できるのは30件までです。残り{rest.length}件は追加後にメモ欄へ戻します</p>
+          {/if}
+        </div>
+      {/if}
       <div class="suggest-actions">
-        <button class="ghost" onclick={() => (suggestions = null)}>閉じる</button>
+        <button class="ghost" onclick={() => ((suggestions = null), (rest = []))}>閉じる</button>
         <button class="primary" onclick={acceptSuggestions} disabled={!suggestions.some((s) => s.on)} data-testid="ai-accept">
           {suggestions.filter((s) => s.on).length}件を追加
         </button>

@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
+import { isBulleted, stripBullet } from '../src/lib/bullets';
 
 type Env = {
   DB: D1Database;
@@ -260,8 +261,10 @@ app.post('/api/ai/split', async (c) => {
           'You turn a user memo into a list of concrete, actionable tasks. ' +
           'Reply in the same language as the memo. Each task title must make sense on its own when read later: ' +
           'include the object and context (never a bare verb like "作成" or "連絡"), but leave dates and times out of the title. ' +
-          'Keep each title under 40 characters, with no numbering or bullets. ' +
-          'Do not invent tasks that are not implied by the memo. Return at most 10 tasks.\n\n' +
+          'Keep each title under 40 characters, with no numbering or bullets, written as natural Japanese with particles ' +
+          '(「牛乳を買う」 not 「牛乳買う」, 「部屋を掃除する」 not 「部屋掃除」). ' +
+          'Do not invent tasks that are not implied by the memo. ' +
+          `If the memo is a list, every list item becomes exactly one task, in the same order; never skip an item. Return at most ${AI_MAX_TASKS} tasks.\n\n` +
           'Deadlines: when the memo says by when (or on which day) a task must be done, set due_date (YYYY-MM-DD) and, ' +
           'if a clock time is given, due_time (HH:MM, 24h). Otherwise set both to null. Never guess a deadline. ' +
           'Look dates up in this table instead of calculating them. A bare weekday like "金曜" means the first matching date ' +
@@ -303,7 +306,7 @@ app.post('/api/ai/split', async (c) => {
         required: ['tasks'],
       },
     },
-    max_tokens: 900,
+    max_tokens: 3000, // ~30 tasks with dates
   });
 
   // Workers AI models answer either as { response } or OpenAI-style { choices: [{ message: { content } }] }
@@ -313,25 +316,83 @@ app.post('/api/ai/split', async (c) => {
     try {
       parsed = JSON.parse(parsed);
     } catch {
-      parsed = { tasks: parsed.split('\n') };
+      // cut off by max_tokens: keep every task object that did arrive complete
+      const objs = parsed.match(/\{[^{}]*"title"[^{}]*\}/g) ?? [];
+      parsed = { tasks: objs.flatMap((o: string) => { try { return [JSON.parse(o)]; } catch { return []; } }) };
     }
   }
   const latest = shiftDays(today, 400);
-  const tasks: AiTask[] = ((parsed?.tasks ?? []) as unknown[])
+  const aiTasks: AiTask[] = ((parsed?.tasks ?? []) as unknown[])
     .map((t: any): AiTask | null => {
       const raw = typeof t === 'string' ? { title: t } : t;
       if (!raw || typeof raw.title !== 'string') return null;
-      const title = raw.title.replace(/^\s*([-*・•]|\d+[.)．、])\s*/, '').trim();
+      const title = stripBullet(raw.title);
       // keep only plausible deadlines: valid format, not in the past, within ~a year
       let due_date = typeof raw.due_date === 'string' && isDate(raw.due_date) ? raw.due_date : null;
       if (due_date && (due_date < today || due_date > latest || ymdUTC(new Date(`${due_date}T00:00:00Z`)) !== due_date)) due_date = null;
       const due_time = due_date && typeof raw.due_time === 'string' && isTime(raw.due_time) ? raw.due_time : null;
       return title ? { title, due_date, due_time } : null;
     })
-    .filter((t): t is AiTask => !!t)
-    .slice(0, 10);
-  return c.json({ tasks });
+    .filter((t): t is AiTask => !!t);
+
+  // Safety net for lists: every bullet line must come back as a task. Lines the model skipped
+  // are added as-is (marker stripped, no deadline) so nothing is silently lost.
+  const { tasks: all, recovered } = coverListItems(memo, aiTasks);
+  const tasks = all.slice(0, AI_MAX_TASKS);
+  // whatever didn't fit is handed back so the client can put it into the memo box for another pass
+  const rest = all.slice(AI_MAX_TASKS).map((t) => t.title);
+  return c.json({ tasks, recovered, overflow: rest.length, rest });
 });
+
+const AI_MAX_TASKS = 30;
+
+/** Character bigrams of a string with spaces/punctuation removed (works for Japanese without a tokenizer). */
+const bigrams = (s: string) => {
+  const t = s.replace(/[\s\p{P}\p{S}]/gu, '');
+  if (t.length < 2) return new Set(t ? [t] : []);
+  return new Set(Array.from({ length: t.length - 1 }, (_, i) => t.slice(i, i + 2)));
+};
+
+/**
+ * Pair each list item in the memo with the AI task that covers it (one-to-one, best overlap first).
+ * Returns tasks in the memo's order, with uncovered items inserted as plain tasks.
+ */
+function coverListItems(memo: string, aiTasks: AiTask[]): { tasks: (AiTask & { recovered?: boolean })[]; recovered: number } {
+  const items = memo.split('\n').filter(isBulleted).map(stripBullet);
+  if (items.length < 2) return { tasks: aiTasks, recovered: 0 };
+
+  const ib = items.map(bigrams);
+  const tb = aiTasks.map((t) => bigrams(t.title));
+  const pairs: { i: number; t: number; score: number }[] = [];
+  const norm = (s: string) => s.replace(/[\s\p{P}\p{S}]/gu, '');
+  ib.forEach((a, i) =>
+    tb.forEach((b, t) => {
+      const short = norm(items[i]);
+      // 1–2 character items ("卵", "牛乳") match when the title contains them
+      const shared = short.length <= 2 ? (norm(aiTasks[t].title).includes(short) ? 2 : 0) : [...a].filter((g) => b.has(g)).length;
+      if (shared >= 2 || (a.size > 0 && shared / a.size >= 0.5)) pairs.push({ i, t, score: shared / Math.max(1, a.size) + shared / 100 });
+    }),
+  );
+  pairs.sort((x, y) => y.score - x.score);
+  const itemToTask = new Map<number, number>();
+  const usedTasks = new Set<number>();
+  for (const p of pairs) {
+    if (itemToTask.has(p.i) || usedTasks.has(p.t)) continue;
+    itemToTask.set(p.i, p.t);
+    usedTasks.add(p.t);
+  }
+
+  const out: (AiTask & { recovered?: boolean })[] = [];
+  let recovered = 0;
+  items.forEach((title, i) => {
+    const t = itemToTask.get(i);
+    if (t !== undefined) out.push(aiTasks[t]);
+    else (out.push({ title, due_date: null, due_time: null, recovered: true }), recovered++);
+  });
+  // tasks the model produced beyond the list items (e.g. it split one item in two) are kept, after
+  aiTasks.forEach((t, i) => usedTasks.has(i) || out.push(t));
+  return { tasks: out, recovered };
+}
 
 // Google Search Console ownership file (needed to list the domain as an OAuth authorized domain).
 // Served by the Worker because static assets would redirect the .html path to an extensionless URL.

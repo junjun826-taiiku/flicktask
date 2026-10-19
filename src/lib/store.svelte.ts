@@ -1,4 +1,5 @@
 // Local-first task store: every change lands in localStorage immediately, then syncs to the Worker when signed in.
+import { stripBullet } from './bullets';
 
 export type Status = 'todo' | 'doing' | 'done';
 export type Task = {
@@ -17,7 +18,9 @@ export type Task = {
   plan_start: string | null;
   plan_end: string | null;
 };
-export type AiSuggestion = { title: string; due_date: string | null; due_time: string | null };
+export type AiSuggestion = { title: string; due_date: string | null; due_time: string | null; recovered?: boolean };
+/** recovered: list items the model skipped, added back as-is. rest: what didn't fit under the 30-task cap. */
+export type AiSplit = { tasks: AiSuggestion[]; recovered: number; overflow: number; rest: string[] };
 const localToday = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -125,7 +128,11 @@ class Store {
   drainBootQueue() {
     const q = load<{ text: string; at: number }[]>('ft.bootQueue', []);
     localStorage.removeItem('ft.bootQueue');
-    for (const item of q) this.add(item.text, item.at);
+    // same rules as Enter in the composer: one task per line, list markers removed, first line on top
+    for (const item of q) {
+      const lines = item.text.split('\n').map(stripBullet).filter(Boolean);
+      lines.forEach((l, i) => this.add(l, item.at + lines.length - 1 - i));
+    }
   }
 
   scheduleSync(delay = 350) {
@@ -209,14 +216,15 @@ class Store {
   }
 
   /** AI split. Sends the local date so "明日" / "金曜" resolve in the user's time zone. */
-  async aiSplit(text: string): Promise<AiSuggestion[]> {
+  async aiSplit(text: string): Promise<AiSplit> {
     const res = await fetch('/api/ai/split', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ text, today: localToday() }),
     });
     if (!res.ok) throw new Error(String(res.status));
-    return ((await res.json()) as { tasks: AiSuggestion[] }).tasks;
+    const j = (await res.json()) as Partial<AiSplit>;
+    return { tasks: j.tasks ?? [], recovered: j.recovered ?? 0, overflow: j.overflow ?? 0, rest: j.rest ?? [] };
   }
 }
 
