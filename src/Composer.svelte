@@ -4,9 +4,10 @@
   import { store } from './lib/store.svelte';
   import { toasts } from './lib/toast.svelte';
   import { vibrate } from './lib/motion';
-  import { shortLabel } from './lib/dates';
+  import { shortLabel, today } from './lib/dates';
   import type { AiSuggestion } from './lib/store.svelte';
   import { stripBullet } from './lib/bullets';
+  import { sheet } from './lib/sheet.svelte';
 
   let host: HTMLDivElement;
   let el: HTMLTextAreaElement | null = null;
@@ -61,7 +62,15 @@
     if (!lines.length) return;
     // keep the memo's order: the first line ends up on top
     const base = Date.now();
-    lines.forEach((l, i) => store.add(l, base + lines.length - 1 - i));
+    if (store.pane === 'schedule') {
+      // schedule mode: calendar-only entries for today (all-day); time can be set from the toast
+      const added = lines.map((l, i) => store.add(l, base + lines.length - 1 - i, { kind: 'event', plan_date: today() }));
+      const first = added[0];
+      toasts.show(
+        lines.length > 1 ? `今日の予定に${lines.length}件追加しました` : '今日の予定に追加しました',
+        lines.length === 1 && first ? { label: '日時を設定', run: () => sheet.edit(first.id) } : undefined,
+      );
+    } else lines.forEach((l, i) => store.add(l, base + lines.length - 1 - i));
     setText('');
     pulse++;
     vibrate(8);
@@ -112,6 +121,18 @@
     <span class="send-ripple" class:go={pulse > 0} aria-hidden="true"></span>
   {/key}
   <div class="composer-actions">
+    <!-- where Enter sends the memo; follows the visible pane, tap to flip -->
+    <button
+      class="target-chip"
+      class:event={store.pane === 'schedule'}
+      onclick={() => (store.pane = store.pane === 'tasks' ? 'schedule' : 'tasks')}
+      aria-label="追加先: {store.pane === 'tasks' ? 'タスク' : '予定'}（タップで切り替え）"
+      data-testid="composer-target"
+    >
+      {#key store.pane}
+        <span in:fly={{ y: 8, duration: 260, easing: backOut }}>→ {store.pane === 'tasks' ? 'タスク' : '予定'}</span>
+      {/key}
+    </button>
     <button
       class="icon-btn ai"
       class:busy={thinking}

@@ -201,3 +201,83 @@
 .suggest-notes { margin-top: 10px; display: grid; gap: 4px; }
 .suggest-notes p { margin: 0; padding: 7px 10px; border-radius: 10px; font-size: 12.5px; font-weight: 600; color: #8a5a00; background: rgba(240, 160, 32, 0.12); }
 .chip.recovered { box-shadow: inset 0 0 0 1.5px rgba(240, 160, 32, 0.6); }
+
+/* ---------- 予定 (calendar-only) ---------- */
+:root { --event: #0ea5a4; --event-2: #0b8f8e; }
+.status-pick { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.status-thumb { width: calc((100% - 8px) / 4); }
+.status-thumb[data-status='event'] { background: #e3f6f5; }
+.status-pick .pick-event { display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+.status-pick .pick-event svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.status-pick .pick-event.active { color: var(--event-2); }
+.kind-hint { margin: -6px 4px 0; font-size: 12px; font-weight: 600; color: var(--event-2); }
+.field-group.plan.event { box-shadow: inset 0 0 0 1.5px rgba(14, 165, 164, 0.4); }
+.field-group.plan.event .plan-icon { background: linear-gradient(135deg, #2cc5c3, var(--event)); }
+.toggle-row:disabled { cursor: default; color: inherit; }
+.allday-btn { grid-column: 1 / -1; justify-self: start; height: 30px; padding: 0 12px; border-radius: 999px; font-size: 12.5px; font-weight: 700; color: var(--ink-2); background: rgba(20, 22, 28, 0.05); transition: background 0.2s, color 0.2s; }
+.allday-btn.on { color: #fff; background: var(--event); }
+
+/* ---------- home: task / schedule panes ---------- */
+.pane-switch { position: relative; display: grid; grid-template-columns: 1fr 1fr; margin: 16px 0 0; padding: 4px; border-radius: 16px; }
+.pane-thumb { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / 2); border-radius: 12px; background: var(--ink);
+  box-shadow: 0 6px 16px -8px rgba(20, 22, 28, 0.6); transform: translateX(calc(var(--i) * 100%)); transition: transform 0.5s var(--spring); }
+.pane-switch button { position: relative; z-index: 1; height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 14px; font-weight: 700; color: var(--ink-2); transition: color 0.3s; }
+.pane-switch button.active { color: #fff; }
+.pane-switch .count { min-width: 20px; height: 18px; padding: 0 6px; border-radius: 999px; font-size: 11px; display: inline-grid; place-items: center; background: rgba(20, 22, 28, 0.07); }
+.pane-switch button.active .count { background: rgba(255, 255, 255, 0.2); }
+.pane-title { display: none; }
+
+@media (max-width: 959px) {
+  .panes[data-pane='tasks'] .pane-schedule, .panes[data-pane='schedule'] .pane-tasks { display: none; }
+  .panes[data-pane='tasks'] .pane-tasks { animation: pane-from-left 0.42s var(--out); }
+  .panes[data-pane='schedule'] .pane-schedule { animation: pane-from-right 0.42s var(--out); }
+}
+@keyframes pane-from-left { from { opacity: 0; transform: translateX(-24px); } }
+@keyframes pane-from-right { from { opacity: 0; transform: translateX(24px); } }
+
+/* wide screens: the two lists side by side */
+@media (min-width: 960px) {
+  .shell { max-width: 1120px; }
+  .shell > .composer { max-width: 720px; margin: 0 auto; width: 100%; }
+  .pane-switch { display: none; }
+  .panes { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 28px; align-items: start; margin-top: 8px; }
+  .pane-title { display: block; margin: 18px 4px -4px; font-size: 13px; font-weight: 800; letter-spacing: 0.08em; color: var(--ink-3); }
+  .pane-schedule { position: sticky; top: 16px; }
+}
+
+/* ---------- composer target chip ---------- */
+.composer-actions .target-chip { margin-right: auto; align-self: center; height: 28px; padding: 0 12px; border-radius: 999px; font-size: 12.5px; font-weight: 700; overflow: hidden;
+  color: var(--ink-2); background: rgba(20, 22, 28, 0.05); transition: background 0.3s, color 0.3s, transform 0.3s var(--spring); }
+.composer-actions .target-chip:active { transform: scale(0.93); }
+.composer-actions .target-chip.event { color: #fff; background: var(--event); }
+.composer-actions .target-chip span { display: inline-block; }
+
+/* ---------- schedule list ---------- */
+.schedule { margin-top: 12px; }
+.schedule-head { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+.add-event { display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 14px 0 10px; border-radius: 999px; font-size: 13.5px; font-weight: 700; color: var(--event-2); transition: transform 0.3s var(--spring); }
+.add-event:active { transform: scale(0.94); }
+.add-event svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.day-group h3 { margin: 16px 4px 8px; font-size: 13px; font-weight: 800; color: var(--ink-2); letter-spacing: 0.02em; }
+.day-group h3.today { color: var(--event-2); }
+.day-group ul { list-style: none; margin: 0; padding: 0; }
+.day-group li { margin-bottom: 8px; }
+.event-card { width: 100%; display: flex; align-items: stretch; gap: 12px; padding: 12px 14px; text-align: left; transition: transform 0.3s var(--spring); }
+.event-card:active { transform: scale(0.98); }
+.event-time { flex: none; width: 46px; display: flex; flex-direction: column; justify-content: center; font-variant-numeric: tabular-nums; }
+.event-time strong { font-size: 14px; font-weight: 750; }
+.event-time span { font-size: 11.5px; color: var(--ink-3); font-weight: 600; }
+.event-time.allday strong { font-size: 12px; color: var(--event-2); }
+.event-bar { flex: none; width: 4px; border-radius: 99px; background: linear-gradient(180deg, #2cc5c3, var(--event)); }
+.event-body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.event-title { font-size: 15.5px; font-weight: 600; overflow-wrap: anywhere; }
+.event-note { font-size: 12.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- 予定 in the calendar: flat teal block with a left bar (tasks stay glassy blue/violet) ---------- */
+.block[data-kind='event'], .block[data-kind='event'][data-status] { opacity: 1; color: #06403f; background: #c9f0ee; border: 0; border-left: 4px solid var(--event);
+  box-shadow: 0 4px 12px -8px rgba(14, 165, 164, 0.7); }
+.block[data-kind='event'] strong { text-decoration: none !important; }
+.block[data-kind='event'] .resize::after { background: rgba(6, 64, 63, 0.35); }
+.m-item.event { color: #06403f; background: #c9f0ee; box-shadow: inset 2px 0 0 var(--event); }
+.ad-plan.event, .ad-plan.event[data-status] { opacity: 1; color: #06403f; background: #c9f0ee; box-shadow: inset 3px 0 0 var(--event); }
+.lg-event { background: #c9f0ee; box-shadow: inset 3px 0 0 var(--event); }

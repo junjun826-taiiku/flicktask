@@ -36,25 +36,26 @@ export function layoutBlocks(tasks: Task[], date: string): PlanBlock[] {
 
 export const timedDeadlines = (tasks: Task[], date: string) =>
   tasks
-    .filter((t) => !t.deleted && t.due_date === date && t.due_time)
+    .filter((t) => !t.deleted && t.kind === 'task' && t.due_date === date && t.due_time)
     .map((t) => ({ task: t, at: toMin(t.due_time!) }))
     .sort((a, b) => a.at - b.at);
 
 export const allDay = (tasks: Task[], date: string) => ({
   plans: tasks.filter((t) => !t.deleted && t.plan_date === date && !t.plan_start),
-  dues: tasks.filter((t) => !t.deleted && t.due_date === date && !t.due_time),
+  dues: tasks.filter((t) => !t.deleted && t.kind === 'task' && t.due_date === date && !t.due_time),
 });
 
-export type MonthItem = { task: Task; kind: 'plan' | 'due'; time: string | null };
+/** event = calendar-only 予定, plan = a task's やる時間, due = a task's 期限 */
+export type MonthItem = { task: Task; kind: 'event' | 'plan' | 'due'; time: string | null };
 
 /** Everything to show in one month cell: blocks first (by time), then deadlines. */
 export function monthItems(tasks: Task[], date: string): MonthItem[] {
   const out: MonthItem[] = [];
   for (const t of tasks) {
     if (t.deleted) continue;
-    if (t.plan_date === date) out.push({ task: t, kind: 'plan', time: t.plan_start });
+    if (t.plan_date === date) out.push({ task: t, kind: t.kind === 'event' ? 'event' : 'plan', time: t.plan_start });
     if (t.due_date === date) out.push({ task: t, kind: 'due', time: t.due_time });
   }
-  const key = (i: MonthItem) => (i.kind === 'plan' ? 0 : 1) * 10000 + (i.time ? toMin(i.time) : -1);
+  const key = (i: MonthItem) => (i.kind === 'due' ? 1 : 0) * 10000 + (i.time ? toMin(i.time) : -1);
   return out.sort((a, b) => key(a) - key(b));
 }

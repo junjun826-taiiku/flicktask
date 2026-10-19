@@ -13,6 +13,7 @@
   import TaskSheet from './TaskSheet.svelte';
   import CalendarScreen from './CalendarScreen.svelte';
   import { router } from './lib/router.svelte';
+  import ScheduleList from './ScheduleList.svelte';
 
   let composer: Composer;
   let firstPaintDone = $state(false);
@@ -54,6 +55,19 @@
 
   <Composer bind:this={composer} />
 
+  <div class="pane-switch glass" role="tablist" aria-label="表示" style="--i:{store.pane === 'tasks' ? 0 : 1}">
+    <span class="pane-thumb" aria-hidden="true"></span>
+    <button role="tab" aria-selected={store.pane === 'tasks'} class:active={store.pane === 'tasks'} onclick={() => (store.pane = 'tasks')} data-testid="pane-tasks">
+      タスク <span class="count">{store.counts.all}</span>
+    </button>
+    <button role="tab" aria-selected={store.pane === 'schedule'} class:active={store.pane === 'schedule'} onclick={() => (store.pane = 'schedule')} data-testid="pane-schedule">
+      スケジュール <span class="count">{store.upcoming.length}</span>
+    </button>
+  </div>
+
+  <div class="panes" data-pane={store.pane}>
+  <section class="pane pane-tasks" aria-label="タスク">
+  <h2 class="pane-title">タスク</h2>
   <Segmented />
 
   {#if store.ready}
@@ -79,6 +93,13 @@
       <span>タスクなし</span>
     </div>
   {/if}
+  </section>
+
+  <section class="pane pane-schedule" aria-label="スケジュール">
+    <h2 class="pane-title">スケジュール</h2>
+    <ScheduleList />
+  </section>
+  </div>
   <footer class="legal" data-testid="legal-links">
     <span>Flick — メモしてフリックで進めるタスク管理</span>
     <a href="/privacy">プライバシーポリシー</a>

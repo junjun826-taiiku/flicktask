@@ -8,7 +8,10 @@
   import { fromMin, toMin, today } from './lib/dates';
   import { vibrate } from './lib/motion';
 
-  const blank = (): Details => ({ title: '', status: 'todo', note: '', due_date: null, due_time: null, plan_date: null, plan_start: null, plan_end: null });
+  const blank = (): Details => ({ title: '', status: 'todo', kind: 'task', note: '', due_date: null, due_time: null, plan_date: null, plan_start: null, plan_end: null });
+  const isEvent = $derived(draft.kind === 'event');
+  /** position of the sliding thumb: the three statuses, then 予定 (calendar only) */
+  const pickIndex = $derived(isEvent ? 3 : STATUS_ORDER.indexOf(draft.status));
 
   let draft = $state<Details>(blank());
   let isNew = $state(false);
@@ -29,7 +32,7 @@
     const t = id ? store.tasks.find((x) => x.id === id) : null;
     isNew = !t;
     draft = t
-      ? { title: t.title, status: t.status, note: t.note, due_date: t.due_date, due_time: t.due_time, plan_date: t.plan_date, plan_start: t.plan_start, plan_end: t.plan_end }
+      ? { title: t.title, status: t.status, kind: t.kind, note: t.note, due_date: t.due_date, due_time: t.due_time, plan_date: t.plan_date, plan_start: t.plan_start, plan_end: t.plan_end }
       : { ...blank(), ...sheet.prefill };
     dy = 0;
     tick().then(() => {
@@ -50,11 +53,17 @@
     const d = $state.snapshot(draft);
     // empty <input type=date|time> yields '' → store null
     for (const k of ['due_date', 'due_time', 'plan_date', 'plan_start', 'plan_end'] as const) if (!d[k]) d[k] = null;
+    // a calendar-only entry has no deadline and always has a date (all-day when no start time)
+    if (d.kind === 'event') {
+      d.due_date = d.due_time = null;
+      d.plan_date ??= today();
+      if (!d.plan_start) d.plan_end = null;
+    }
     if (isNew) {
       if (d.title.trim()) {
         const { title, ...rest } = d;
         store.add(title, Date.now(), rest);
-        toasts.show('追加しました');
+        toasts.show(d.kind === 'event' ? '予定を追加しました' : '追加しました');
       }
     } else if (sheet.taskId) {
       store.update(sheet.taskId, d);
@@ -71,6 +80,15 @@
     toasts.show('削除しました', { label: '元に戻す', run: () => store.restore(id) });
   }
 
+  function pickEvent() {
+    draft.kind = 'event';
+    if (!draft.plan_date) setPlan(true);
+  }
+  function pickStatus(s: (typeof STATUS_ORDER)[number]) {
+    draft.kind = 'task';
+    draft.status = s;
+  }
+
   // --- deadline / schedule editing ---
   function setDue(on: boolean) {
     draft.due_date = on ? (draft.plan_date ?? today()) : null;
@@ -81,10 +99,14 @@
       draft.plan_date = draft.plan_start = draft.plan_end = null;
       return;
     }
-    const start = Math.ceil((new Date().getHours() * 60 + new Date().getMinutes() + 1) / 30) * 30;
     draft.plan_date = draft.due_date ?? today();
-    draft.plan_start = fromMin(Math.min(start, 22 * 60));
-    draft.plan_end = fromMin(Math.min(start, 22 * 60) + 60);
+    setTimes();
+  }
+  /** next half hour from now, one hour long */
+  function setTimes() {
+    const start = Math.min(Math.ceil((new Date().getHours() * 60 + new Date().getMinutes() + 1) / 30) * 30, 22 * 60);
+    draft.plan_start = fromMin(start);
+    draft.plan_end = fromMin(start + 60);
   }
   // keep the block at least 15 minutes long, preserving its length when the start moves
   let lastStart = $state<string | null>(null);
@@ -135,7 +157,7 @@
     style="transform: translate3d(0,{dy}px,0)"
     role="dialog"
     aria-modal="true"
-    aria-label={isNew ? '新しいタスク' : 'タスクの詳細'}
+    aria-label={isEvent ? '予定' : isNew ? '新しいタスク' : 'タスクの詳細'}
     in:fly={{ y: 420, duration: 520, easing: backOut, opacity: 1 }}
     out:fly={{ y: 520, duration: 300, easing: cubicOut, opacity: 1 }}
     data-testid="sheet"
@@ -166,14 +188,21 @@
         data-testid="sheet-title"
       ></textarea>
 
-      <div class="status-pick" role="radiogroup" aria-label="ステータス" style="--i:{STATUS_ORDER.indexOf(draft.status)}">
-        <span class="status-thumb" data-status={draft.status} aria-hidden="true"></span>
+      <div class="status-pick" role="radiogroup" aria-label="種類とステータス" style="--i:{pickIndex}">
+        <span class="status-thumb" data-status={isEvent ? 'event' : draft.status} aria-hidden="true"></span>
         {#each STATUS_ORDER as s}
-          <button role="radio" aria-checked={draft.status === s} class:active={draft.status === s} onclick={() => (draft.status = s)} data-testid="sheet-status-{s}">
+          <button role="radio" aria-checked={!isEvent && draft.status === s} class:active={!isEvent && draft.status === s} onclick={() => pickStatus(s)} data-testid="sheet-status-{s}">
             {STATUS_LABEL[s]}
           </button>
         {/each}
+        <button role="radio" aria-checked={isEvent} class:active={isEvent} class="pick-event" onclick={pickEvent} title="カレンダーとスケジュールにだけ表示" data-testid="sheet-kind-event">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="3" /><path d="M4 10h16M9 3v4M15 3v4" /></svg>
+          予定
+        </button>
       </div>
+      {#if isEvent}
+        <p class="kind-hint" transition:slide={{ duration: 240 }}>カレンダーとスケジュールにだけ表示されます</p>
+      {/if}
 
       <label class="field note">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 11h14M5 16h9" /></svg>
@@ -188,8 +217,9 @@
         ></textarea>
       </label>
 
-      <!-- Deadline: drawn as an outline / line everywhere, never as a filled block -->
-      <section class="field-group due" class:on={!!draft.due_date}>
+      <!-- Deadline: drawn as an outline / line everywhere, never as a filled block (tasks only) -->
+      {#if !isEvent}
+      <section class="field-group due" class:on={!!draft.due_date} transition:slide={{ duration: 260, easing: cubicOut }}>
         <button class="toggle-row" onclick={() => setDue(!draft.due_date)} aria-pressed={!!draft.due_date} data-testid="sheet-due-toggle">
           <span class="kind-icon due-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6" /></svg>
@@ -207,15 +237,16 @@
           </div>
         {/if}
       </section>
+      {/if}
 
       <!-- Scheduled time: drawn as a filled block everywhere -->
-      <section class="field-group plan" class:on={!!draft.plan_date}>
-        <button class="toggle-row" onclick={() => setPlan(!draft.plan_date)} aria-pressed={!!draft.plan_date} data-testid="sheet-plan-toggle">
+      <section class="field-group plan" class:on={!!draft.plan_date} class:event={isEvent}>
+        <button class="toggle-row" onclick={() => !isEvent && setPlan(!draft.plan_date)} aria-pressed={!!draft.plan_date} disabled={isEvent} data-testid="sheet-plan-toggle">
           <span class="kind-icon plan-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="3" /><path d="M4 10h16M9 3v4M15 3v4" /></svg>
           </span>
-          <span class="label">やる時間</span>
-          <span class="switch" aria-hidden="true"><i></i></span>
+          <span class="label">{isEvent ? '日時' : 'やる時間'}</span>
+          {#if !isEvent}<span class="switch" aria-hidden="true"><i></i></span>{/if}
         </button>
         {#if draft.plan_date}
           <div class="inputs" transition:slide={{ duration: 280, easing: cubicOut }}>
@@ -223,6 +254,9 @@
             <input type="time" bind:value={draft.plan_start} aria-label="開始時刻" data-testid="sheet-plan-start" />
             <span class="dash">–</span>
             <input type="time" bind:value={draft.plan_end} aria-label="終了時刻" data-testid="sheet-plan-end" />
+            {#if isEvent}
+              <button class="allday-btn" class:on={!draft.plan_start} onclick={() => (draft.plan_start ? ((draft.plan_start = null), (draft.plan_end = null)) : setTimes())} data-testid="sheet-allday">終日</button>
+            {/if}
           </div>
         {/if}
       </section>

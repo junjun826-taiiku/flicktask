@@ -78,6 +78,7 @@
 </div>
 
 <div class="legend" aria-hidden="true">
+  <span><i class="lg-event"></i>予定</span>
   <span><i class="lg-plan"></i>やる時間</span>
   <span><i class="lg-due"></i>期限</span>
 </div>

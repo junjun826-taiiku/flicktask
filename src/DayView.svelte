@@ -164,7 +164,7 @@
         <span class="allday-label">終日</span>
         <div class="allday-items">
           {#each top.plans as t (t.id)}
-            <button class="ad-plan" data-status={t.status} onclick={() => sheet.edit(t.id)} data-testid="allday-plan" in:scale={{ start: 0.8, duration: 380, easing: backOut }}>
+            <button class="ad-plan" class:event={t.kind === 'event'} data-status={t.status} onclick={() => sheet.edit(t.id)} data-testid="allday-plan" in:scale={{ start: 0.8, duration: 380, easing: backOut }}>
               {t.title}
             </button>
           {/each}
@@ -194,11 +194,12 @@
               class="block"
               class:dragging
               data-status={b.task.status}
+              data-kind={b.task.kind}
               style="top:{(p.start / 60) * H}px; height:{Math.max(((p.end - p.start) / 60) * H - 2, 22)}px; left:calc({(b.col / b.cols) * 100}% + 2px); width:calc({100 / b.cols}% - 4px)"
               onpointerdown={(e) => press(e, b, 'move')}
               onclick={(e) => (e.stopPropagation(), !justDragged && sheet.edit(b.task.id))}
               in:scale={{ start: 0.85, duration: 420, delay: i * 40, easing: backOut }}
-              aria-label="{b.task.title} {b.task.plan_start}–{b.task.plan_end ?? ''}（{STATUS_LABEL[b.task.status]}）"
+              aria-label="{b.task.title} {b.task.plan_start}–{b.task.plan_end ?? ''}（{b.task.kind === 'event' ? '予定' : STATUS_LABEL[b.task.status]}）"
               data-testid="block"
             >
               <strong>{b.task.title}</strong>

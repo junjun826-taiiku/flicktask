@@ -17,7 +17,10 @@ export type Task = {
   plan_date: string | null;
   plan_start: string | null;
   plan_end: string | null;
+  /** 'task' = to-do with a status; 'event' = calendar-only schedule entry (never in the task list). */
+  kind: Kind;
 };
+export type Kind = 'task' | 'event';
 export type AiSuggestion = { title: string; due_date: string | null; due_time: string | null; recovered?: boolean };
 /** recovered: list items the model skipped, added back as-is. rest: what didn't fit under the 30-task cap. */
 export type AiSplit = { tasks: AiSuggestion[]; recovered: number; overflow: number; rest: string[] };
@@ -25,11 +28,11 @@ const localToday = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
-export type Details = Pick<Task, 'title' | 'note' | 'due_date' | 'due_time' | 'plan_date' | 'plan_start' | 'plan_end' | 'status'>;
+export type Details = Pick<Task, 'title' | 'note' | 'due_date' | 'due_time' | 'plan_date' | 'plan_start' | 'plan_end' | 'status' | 'kind'>;
 
-const EMPTY_DETAILS = { note: '', due_date: null, due_time: null, plan_date: null, plan_start: null, plan_end: null };
+const EMPTY_DETAILS = { note: '', due_date: null, due_time: null, plan_date: null, plan_start: null, plan_end: null, kind: 'task' as Kind };
 /** Tasks saved before details existed (or coming from an older server) get the new fields filled in. */
-const normalize = (t: any): Task => ({ ...EMPTY_DETAILS, ...t, note: t.note ?? '' });
+const normalize = (t: any): Task => ({ ...EMPTY_DETAILS, ...t, note: t.note ?? '', kind: t.kind === 'event' ? 'event' : 'task' });
 export type User = { id: string; email: string; name: string | null; picture: string | null };
 export type Filter = 'all' | Status;
 
@@ -59,14 +62,23 @@ class Store {
 
   visible = $derived(
     this.tasks
-      .filter((t) => !t.deleted && (this.filter === 'all' || t.status === this.filter))
+      .filter((t) => !t.deleted && t.kind === 'task' && (this.filter === 'all' || t.status === this.filter))
       .sort((a, b) => b.created_at - a.created_at),
   );
   counts = $derived.by(() => {
     const c = { all: 0, todo: 0, doing: 0, done: 0 };
-    for (const t of this.tasks) if (!t.deleted) (c.all++, c[t.status]++);
+    for (const t of this.tasks) if (!t.deleted && t.kind === 'task') (c.all++, c[t.status]++);
     return c;
   });
+  /** Calendar-only entries from today on, in date/time order (all-day first within a day). */
+  upcoming = $derived.by(() => {
+    const today = localToday();
+    return this.tasks
+      .filter((t) => !t.deleted && t.kind === 'event' && t.plan_date && t.plan_date >= today)
+      .sort((a, b) => a.plan_date!.localeCompare(b.plan_date!) || (a.plan_start ?? '').localeCompare(b.plan_start ?? ''));
+  });
+  /** Which half of the home screen is showing on phones (both show side by side on wide screens). */
+  pane = $state<'tasks' | 'schedule'>('tasks');
 
   #persist() {
     try {

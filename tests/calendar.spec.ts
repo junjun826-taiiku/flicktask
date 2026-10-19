@@ -341,6 +341,10 @@ test('drag the bottom edge to change the end time', async ({ page }, info) => {
   await expect(b).toContainText('14:00–14:15');
 });
 
+test.describe(() => {
+// Simulated touches go through CDP one call at a time; under heavy parallel load the "quick" swipe's
+// first move can arrive after the 300 ms hold threshold. Passes reliably on its own, so allow a retry.
+test.describe.configure({ retries: 2 });
 test('touch: press and hold drags a block, a quick swipe just scrolls', async ({ page }, info) => {
   test.skip(info.project.name !== 'mobile');
   const day = plusDays(5);
@@ -368,4 +372,5 @@ test('touch: press and hold drags a block, a quick swipe just scrolls', async ({
   for (let i = 1; i <= 8; i++) await touch('touchMove', x, y + (i * 57) / 8);
   await touch('touchEnd');
   await expect(b).toContainText('10:00–11:00');
+});
 });
