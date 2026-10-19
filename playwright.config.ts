@@ -11,6 +11,8 @@ export default defineConfig({
   workers: 4,
   reporter: [['list']],
   use: { baseURL, trace: 'retain-on-failure' },
+  // @local tests need the dev-only test login, which production (correctly) does not have
+  grepInvert: isLocal ? undefined : /@local/,
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'] }, testIgnore: isLocal ? /prod\.spec/ : /app\.spec/ },
     { name: 'mobile', use: { ...devices['Pixel 7'] }, testIgnore: isLocal ? /prod\.spec/ : /.*/ },

@@ -5,6 +5,8 @@
   import { store, STATUS_LABEL, STATUS_ORDER, type Task, type Status } from './lib/store.svelte';
   import { toasts } from './lib/toast.svelte';
   import { vibrate } from './lib/motion';
+  import { sheet } from './lib/sheet.svelte';
+  import { dueState, shortLabel } from './lib/dates';
 
   let { task, hint = false }: { task: Task; hint?: boolean } = $props();
 
@@ -16,9 +18,6 @@
   let animating = $state(false);
   let instant = $state(false);
   let settle = $state<0 | 1 | -1>(0);
-  let editing = $state(false);
-  let draft = $state('');
-  let input = $state<HTMLInputElement>();
 
   let start = { x: 0, y: 0, t: 0 };
   let tracking = false;
@@ -35,7 +34,7 @@
   const progress = $derived(Math.min(1, Math.abs(dx) / threshold()));
 
   function onDown(e: PointerEvent) {
-    if (editing || e.button !== 0 || animating) return;
+    if (e.button !== 0 || animating) return;
     start = { x: e.clientX, y: e.clientY, t: performance.now() };
     tracking = true;
     armed = false;
@@ -120,25 +119,17 @@
     vibrate(8);
   }
 
-  async function startEdit() {
-    if (suppressClick || editing) return;
-    draft = task.title;
-    editing = true;
-    await tick();
-    input?.focus();
-    input?.select();
+  function openDetail() {
+    if (suppressClick) return;
+    sheet.edit(task.id);
   }
-  function saveEdit() {
-    if (!editing) return;
-    editing = false;
-    if (draft.trim() && draft.trim() !== task.title) store.rename(task.id, draft);
-  }
+  const due = $derived(dueState(task.due_date, task.due_time));
 
   function onKey(e: KeyboardEvent) {
-    if (editing || e.target !== e.currentTarget) return;
+    if (e.target !== e.currentTarget) return;
     if (e.key === 'ArrowRight' && rightAction) commit(rightAction, 1);
     else if (e.key === 'ArrowLeft' && leftAction) commit(leftAction, -1);
-    else if (e.key === 'Enter') startEdit();
+    else if (e.key === 'Enter') sheet.edit(task.id);
     else if (e.key === 'Delete' || e.key === 'Backspace') commit({ kind: 'delete' }, -1);
     else return;
     e.preventDefault();
@@ -154,7 +145,7 @@
     if (seen) return;
     // one-time wordless hint: the card peeks right, then left
     const steps: [number, number][] = [[900, 64], [1350, 0], [1700, -64], [2150, 0]];
-    for (const [at, x] of steps) setTimeout(() => !dragging && !editing && (dx = x), at);
+    for (const [at, x] of steps) setTimeout(() => !dragging && (dx = x), at);
   });
 
   function actionLabel(a: Action) {
@@ -231,23 +222,31 @@
       {/key}
     </button>
 
-    {#if editing}
-      <input
-        bind:this={input}
-        bind:value={draft}
-        class="title-input"
-        onblur={saveEdit}
-        onkeydown={(e) => {
-          if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) saveEdit();
-          if (e.key === 'Escape') editing = false;
-        }}
-        aria-label="タスク名"
-        data-testid="title-input"
-      />
-    {:else}
-      <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-      <span class="title" onclick={startEdit} data-testid="task-title">{task.title}</span>
-    {/if}
+    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+    <div class="body" onclick={openDetail} data-testid="task-open">
+      <span class="title" data-testid="task-title">{task.title}</span>
+      {#if task.due_date || task.plan_date || task.note}
+        <span class="meta">
+          {#if task.plan_date}
+            <span class="chip plan-chip" data-testid="chip-plan">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2.5" /></svg>
+              {shortLabel(task.plan_date, task.plan_start)}{task.plan_end ? `–${task.plan_end.replace(/^0/, '')}` : ''}
+            </span>
+          {/if}
+          {#if task.due_date}
+            <span class="chip due-chip" data-due={due} data-testid="chip-due">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 14V2.5M4 2.5h7.5L10 5.2l1.5 2.8H4" /></svg>
+              {shortLabel(task.due_date, task.due_time)}
+            </span>
+          {/if}
+          {#if task.note}
+            <span class="chip note-chip" aria-label="メモあり" data-testid="chip-note">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4h10M3 8h10M3 12h6" /></svg>
+            </span>
+          {/if}
+        </span>
+      {/if}
+    </div>
 
     <span class="badge" data-status={task.status}>{STATUS_LABEL[task.status]}</span>
   </div>

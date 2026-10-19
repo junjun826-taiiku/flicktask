@@ -179,15 +179,16 @@ test('status tabs filter the list and counts update', async ({ page }) => {
   await expect(card(page, 'A案件')).toBeVisible();
 });
 
-test('tap a title to rename it', async ({ page }) => {
+test('tap a card to open the detail sheet and rename it', async ({ page }) => {
   await page.goto('/');
   await ready(page);
   await add(page, '旧タイトル');
   await card(page, '旧タイトル').getByTestId('task-title').click();
-  const input = page.getByTestId('title-input');
-  await expect(input).toBeFocused();
-  await input.fill('新タイトル');
-  await input.press('Enter');
+  const sheet = page.getByTestId('sheet');
+  await expect(sheet).toBeVisible();
+  await page.getByTestId('sheet-title').fill('新タイトル');
+  await page.getByTestId('sheet-done').click();
+  await expect(sheet).toHaveCount(0);
   await expect(card(page, '新タイトル')).toBeVisible();
   await expect(card(page, '旧タイトル')).toHaveCount(0);
 });

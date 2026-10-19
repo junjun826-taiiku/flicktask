@@ -10,6 +10,9 @@
   import Segmented from './Segmented.svelte';
   import TaskCard from './TaskCard.svelte';
   import Account from './Account.svelte';
+  import TaskSheet from './TaskSheet.svelte';
+  import CalendarScreen from './CalendarScreen.svelte';
+  import { router } from './lib/router.svelte';
 
   let composer: Composer;
   let firstPaintDone = $state(false);
@@ -38,7 +41,15 @@
         <span class="sync" class:on={store.syncing} aria-label={store.syncing ? '同期中' : '同期済み'} data-testid="sync-dot"></span>
       {/if}
     </div>
-    <Account />
+    <div class="top-actions">
+      {#if store.ready}
+        <button class="cal-btn glass" onclick={() => router.openMonth()} aria-label="カレンダー" data-testid="open-calendar" in:scale|global={{ start: 0.6, duration: 450, easing: backOut }}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3.5" /><path d="M3.5 10h17M8.5 3v4M15.5 3v4" /></svg>
+          <span>{new Date().getDate()}</span>
+        </button>
+      {/if}
+      <Account />
+    </div>
   </header>
 
   <Composer bind:this={composer} />
@@ -74,6 +85,12 @@
     <a href="/terms">利用規約</a>
   </footer>
 </div>
+
+{#if store.ready && router.route.name !== 'home'}
+  <CalendarScreen />
+{/if}
+
+<TaskSheet />
 
 <div class="toasts" aria-live="polite">
   {#each toasts.items as t (t.id)}

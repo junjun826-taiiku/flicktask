@@ -147,14 +147,31 @@ app.get('/api/me', (c) => c.json(c.get('user')));
 
 app.get('/api/tasks', async (c) => {
   const { results } = await c.env.DB.prepare(
-    'SELECT id, title, status, created_at, updated_at, deleted FROM tasks WHERE user_id = ? ORDER BY created_at DESC',
+    `SELECT id, title, status, created_at, updated_at, deleted, note, due_date, due_time, plan_date, plan_start, plan_end
+     FROM tasks WHERE user_id = ? ORDER BY created_at DESC`,
   )
     .bind(c.get('user').id)
     .all();
   return c.json(results.map((t: any) => ({ ...t, deleted: !!t.deleted })));
 });
 
-type TaskIn = { id: string; title: string; status: string; created_at: number; updated_at: number; deleted?: boolean };
+type TaskIn = {
+  id: string;
+  title: string;
+  status: string;
+  created_at: number;
+  updated_at: number;
+  deleted?: boolean;
+  note?: string;
+  due_date?: string | null;
+  due_time?: string | null;
+  plan_date?: string | null;
+  plan_start?: string | null;
+  plan_end?: string | null;
+};
+
+const isDate = (v: unknown) => v == null || (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v));
+const isTime = (v: unknown) => v == null || (typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v));
 
 // Batch upsert with last-write-wins on updated_at. Lets the local-first client push its queue in one request.
 app.post('/api/tasks/sync', async (c) => {
@@ -165,16 +182,37 @@ app.post('/api/tasks/sync', async (c) => {
     if (typeof t.id !== 'string' || t.id.length > 64) return c.json({ error: 'bad id' }, 400);
     if (typeof t.title !== 'string' || t.title.length > 2000) return c.json({ error: 'bad title' }, 400);
     if (!STATUSES.includes(t.status as any)) return c.json({ error: 'bad status' }, 400);
+    if (t.note != null && (typeof t.note !== 'string' || t.note.length > 20000)) return c.json({ error: 'bad note' }, 400);
+    if (!isDate(t.due_date) || !isDate(t.plan_date)) return c.json({ error: 'bad date' }, 400);
+    if (!isTime(t.due_time) || !isTime(t.plan_start) || !isTime(t.plan_end)) return c.json({ error: 'bad time' }, 400);
   }
   if (tasks.length) {
     await c.env.DB.batch(
       tasks.map((t) =>
         c.env.DB.prepare(
-          `INSERT INTO tasks (id, user_id, title, status, created_at, updated_at, deleted) VALUES (?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO tasks (id, user_id, title, status, created_at, updated_at, deleted,
+             note, due_date, due_time, plan_date, plan_start, plan_end)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status,
-             updated_at = excluded.updated_at, deleted = excluded.deleted
+             updated_at = excluded.updated_at, deleted = excluded.deleted, note = excluded.note,
+             due_date = excluded.due_date, due_time = excluded.due_time,
+             plan_date = excluded.plan_date, plan_start = excluded.plan_start, plan_end = excluded.plan_end
            WHERE tasks.user_id = excluded.user_id AND excluded.updated_at > tasks.updated_at`,
-        ).bind(t.id, userId, t.title.trim(), t.status, Math.floor(Number(t.created_at)) || Date.now(), Math.floor(Number(t.updated_at)) || Date.now(), t.deleted ? 1 : 0),
+        ).bind(
+          t.id,
+          userId,
+          t.title.trim(),
+          t.status,
+          Math.floor(Number(t.created_at)) || Date.now(),
+          Math.floor(Number(t.updated_at)) || Date.now(),
+          t.deleted ? 1 : 0,
+          t.note ?? '',
+          t.due_date ?? null,
+          t.due_date ? (t.due_time ?? null) : null,
+          t.plan_date ?? null,
+          t.plan_date ? (t.plan_start ?? null) : null,
+          t.plan_date ? (t.plan_end ?? null) : null,
+        ),
       ),
     );
   }

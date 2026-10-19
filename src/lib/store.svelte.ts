@@ -1,7 +1,27 @@
 // Local-first task store: every change lands in localStorage immediately, then syncs to the Worker when signed in.
 
 export type Status = 'todo' | 'doing' | 'done';
-export type Task = { id: string; title: string; status: Status; created_at: number; updated_at: number; deleted: boolean };
+export type Task = {
+  id: string;
+  title: string;
+  status: Status;
+  created_at: number;
+  updated_at: number;
+  deleted: boolean;
+  note: string;
+  /** Deadline, local wall-clock. due_time null = end of that day. */
+  due_date: string | null;
+  due_time: string | null;
+  /** Scheduled work block, local wall-clock 'YYYY-MM-DD' + 'HH:MM'. */
+  plan_date: string | null;
+  plan_start: string | null;
+  plan_end: string | null;
+};
+export type Details = Pick<Task, 'title' | 'note' | 'due_date' | 'due_time' | 'plan_date' | 'plan_start' | 'plan_end' | 'status'>;
+
+const EMPTY_DETAILS = { note: '', due_date: null, due_time: null, plan_date: null, plan_start: null, plan_end: null };
+/** Tasks saved before details existed (or coming from an older server) get the new fields filled in. */
+const normalize = (t: any): Task => ({ ...EMPTY_DETAILS, ...t, note: t.note ?? '' });
 export type User = { id: string; email: string; name: string | null; picture: string | null };
 export type Filter = 'all' | Status;
 
@@ -21,7 +41,7 @@ function load<T>(key: string, fallback: T): T {
 }
 
 class Store {
-  tasks = $state<Task[]>(load(TASKS_KEY, []));
+  tasks = $state<Task[]>(load<any[]>(TASKS_KEY, []).map(normalize));
   user = $state<User | null>(null);
   ready = $state(false);
   syncing = $state(false);
@@ -56,10 +76,10 @@ class Store {
     this.scheduleSync();
   }
 
-  add(title: string, at = Date.now()) {
+  add(title: string, at = Date.now(), extra: Partial<Details> = {}) {
     const text = title.trim();
     if (!text) return null;
-    const task: Task = { id: crypto.randomUUID(), title: text, status: 'todo', created_at: at, updated_at: at, deleted: false };
+    const task: Task = { id: crypto.randomUUID(), title: text, status: 'todo', created_at: at, updated_at: at, deleted: false, ...EMPTY_DETAILS, ...extra };
     this.tasks.unshift(task);
     this.dirty.add(task.id);
     this.#persist();
@@ -74,6 +94,16 @@ class Store {
     if (!t) return;
     const i = STATUS_ORDER.indexOf(t.status) + dir;
     if (i >= 0 && i < STATUS_ORDER.length) this.setStatus(id, STATUS_ORDER[i]);
+  }
+  /** Save the detail sheet. Only writes when something actually changed. */
+  update(id: string, patch: Partial<Details>) {
+    const t = this.tasks.find((x) => x.id === id);
+    if (!t) return;
+    if (patch.title !== undefined && !patch.title.trim()) delete patch.title;
+    if (patch.due_date === null) patch.due_time = null;
+    if (patch.plan_date === null) (patch.plan_start = null), (patch.plan_end = null);
+    const changed = (Object.keys(patch) as (keyof Details)[]).some((k) => t[k] !== patch[k]);
+    if (changed) this.#touch(id, patch);
   }
   rename(id: string, title: string) {
     const text = title.trim();
@@ -129,7 +159,7 @@ class Store {
     const res = await fetch('/api/tasks');
     if (res.status === 401) return this.#signedOut();
     if (!res.ok) return;
-    const remote = (await res.json()) as Task[];
+    const remote = ((await res.json()) as any[]).map(normalize);
     const byId = new Map(this.tasks.map((t) => [t.id, t]));
     for (const r of remote) {
       const local = byId.get(r.id);
