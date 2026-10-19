@@ -57,3 +57,6 @@ npm run deploy
 
 Google Cloud Console の OAuth クライアント（ウェブアプリケーション）に、承認済みのリダイレクト URI として
 `https://flicktask.junjun-tama.workers.dev/auth/callback` を登録してください。
+
+OAuth 同意画面は現在「テスト中」です。ログインできるのは Google Auth Platform →「対象」でテストユーザーに追加したアカウント（最大100人）のみです。
+誰でもログインできる本番公開にするには、ホームページ・プライバシーポリシーの URL と、所有確認済みの承認済みドメイン（独自ドメイン推奨）が必要です。

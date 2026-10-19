@@ -191,10 +191,14 @@ app.post('/api/ai/split', async (c) => {
       {
         role: 'system',
         content:
-          'You turn a user memo into a short list of concrete, actionable tasks. ' +
-          'Reply in the same language as the memo. Each task title is short (under 40 characters), starts with the action, and has no numbering or bullets. ' +
+          'You turn a user memo into a list of concrete, actionable tasks. ' +
+          'Reply in the same language as the memo. Each task must make sense on its own when read later: ' +
+          'include the object and any deadline or context from the memo (never a bare verb like "作成" or "連絡"). ' +
+          'Keep each title under 40 characters, with no numbering or bullets. ' +
           'Do not invent tasks that are not implied by the memo. Return at most 10 tasks.',
       },
+      { role: 'user', content: '週末に引っ越すので段ボールを買って、ガスを止める連絡をする' },
+      { role: 'assistant', content: '{"tasks":["引っ越し用の段ボールを買う","ガス会社に停止の連絡をする"]}' },
       { role: 'user', content: memo },
     ],
     response_format: {
