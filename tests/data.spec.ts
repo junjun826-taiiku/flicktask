@@ -58,7 +58,8 @@ test('incremental sync applies deletions from another device @local', async ({ p
   await login(page, name);
   await memo(page).fill('消される予定のタスク');
   await memo(page).press('Enter');
-  await page.waitForTimeout(800);
+  // wait until this device has pushed everything (no pending changes), not a fixed time
+  await expect.poll(() => page.evaluate(() => (localStorage.getItem('ft.dirty.v1') ?? '[]') + (localStorage.getItem('ft.dirtyEvents.v1') ?? '[]')), { timeout: 10_000 }).toBe('[][]');
 
   const ctx = await browser.newContext();
   const p2 = await ctx.newPage();
@@ -96,7 +97,8 @@ test('export a backup and import it into another account @local', async ({ page,
   await login(page, `exp-${uid()}`);
   await memo(page).fill('・引き継ぐ書類\n・引き継ぐ連絡先');
   await memo(page).press('Enter');
-  await page.waitForTimeout(800);
+  // wait until this device has pushed everything (no pending changes), not a fixed time
+  await expect.poll(() => page.evaluate(() => (localStorage.getItem('ft.dirty.v1') ?? '[]') + (localStorage.getItem('ft.dirtyEvents.v1') ?? '[]')), { timeout: 10_000 }).toBe('[][]');
 
   await page.getByTestId('avatar').click();
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('export').click()]);

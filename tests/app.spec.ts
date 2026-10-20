@@ -248,7 +248,8 @@ test('signed-in tasks sync to the server, local memos are uploaded at login', as
   await add(page, 'クラウド保存');
   await flick(page, card(page, 'クラウド保存'), 1);
   await expect(page.getByTestId('sync-dot')).toHaveAttribute('aria-label', '同期済み');
-  await page.waitForTimeout(800);
+  // wait until this device has pushed everything (no pending changes), not a fixed time
+  await expect.poll(() => page.evaluate(() => (localStorage.getItem('ft.dirty.v1') ?? '[]') + (localStorage.getItem('ft.dirtyEvents.v1') ?? '[]')), { timeout: 10_000 }).toBe('[][]');
 
   // a brand-new browser profile, same account
   const other = await browser.newContext();
@@ -261,7 +262,8 @@ test('signed-in tasks sync to the server, local memos are uploaded at login', as
   // a delete on one device propagates
   await flick(p2, card(p2, 'ログイン前メモ'), -1);
   await expect(card(p2, 'ログイン前メモ')).toHaveCount(0);
-  await p2.waitForTimeout(800);
+  // wait until device 2 has actually pushed the delete (no pending changes), not a fixed time
+  await expect.poll(() => p2.evaluate(() => localStorage.getItem('ft.dirty.v1')), { timeout: 10_000 }).toBe('[]');
   await page.reload();
   await ready(page);
   await expect(card(page, 'ログイン前メモ')).toHaveCount(0);
@@ -271,7 +273,8 @@ test('signed-in tasks sync to the server, local memos are uploaded at login', as
 test('tasks are private to each account', async ({ page, browser }) => {
   await login(page);
   await add(page, '秘密のタスク');
-  await page.waitForTimeout(800);
+  // wait until this device has pushed everything (no pending changes), not a fixed time
+  await expect.poll(() => page.evaluate(() => (localStorage.getItem('ft.dirty.v1') ?? '[]') + (localStorage.getItem('ft.dirtyEvents.v1') ?? '[]')), { timeout: 10_000 }).toBe('[][]');
   const other = await browser.newContext();
   const p2 = await other.newPage();
   await login(p2);

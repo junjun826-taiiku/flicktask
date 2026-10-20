@@ -108,7 +108,8 @@ test('ranges sync to another device @local', async ({ page, browser }) => {
   await page.goto(`/auth/dev-login?name=${name}`);
   await ready(page);
   await addRange(page, '連日の大会', plusDays(5), plusDays(6));
-  await page.waitForTimeout(900);
+  // wait until this device has pushed everything (no pending changes), not a fixed time
+  await expect.poll(() => page.evaluate(() => (localStorage.getItem('ft.dirty.v1') ?? '[]') + (localStorage.getItem('ft.dirtyEvents.v1') ?? '[]')), { timeout: 10_000 }).toBe('[][]');
   const other = await browser.newContext();
   const p2 = await other.newPage();
   await p2.goto(`/auth/dev-login?name=${name}`);

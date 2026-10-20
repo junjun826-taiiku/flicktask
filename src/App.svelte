@@ -13,6 +13,7 @@
   import TaskSheet from './TaskSheet.svelte';
   import EventSheet from './EventSheet.svelte';
   import EventSwitcher from './EventSwitcher.svelte';
+  import LiveBanner from './LiveBanner.svelte';
   import CalendarScreen from './CalendarScreen.svelte';
   import { router } from './lib/router.svelte';
   import ScheduleList from './ScheduleList.svelte';
@@ -67,7 +68,7 @@
 
   <Composer bind:this={composer} />
 
-  {#if store.ready}<EventSwitcher />{/if}
+  {#if store.ready}<LiveBanner /><EventSwitcher />{/if}
 
   <div class="pane-switch glass" role="tablist" aria-label="表示" style="--i:{store.pane === 'tasks' ? 0 : 1}">
     <span class="pane-thumb" aria-hidden="true"></span>

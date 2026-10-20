@@ -6,6 +6,7 @@
   import DayView from './DayView.svelte';
   import EventList from './EventList.svelte';
   import EventDetail from './EventDetail.svelte';
+  import LiveMode from './LiveMode.svelte';
 
   const r = $derived(router.route);
 
@@ -42,6 +43,10 @@
           <EventDetail id={r.id} tab={r.tab} />
         </div>
       {/key}
+    {:else if r.name === 'live'}
+      <div class="cal-page live-page" in:fly={{ y: 40, duration: 420, easing: cubicOut }}>
+        <LiveMode id={r.id} />
+      </div>
     {/if}
   </div>
 </div>

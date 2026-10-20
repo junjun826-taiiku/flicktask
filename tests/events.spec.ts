@@ -192,7 +192,8 @@ test('events and their tasks sync to another device @local', async ({ page, brow
   await page.getByTestId('event-add-task').click();
   await page.getByTestId('sheet-title').fill('大会の準備');
   await page.getByTestId('sheet-done').click();
-  await page.waitForTimeout(900);
+  // wait until this device has pushed everything (no pending changes), not a fixed time
+  await expect.poll(() => page.evaluate(() => (localStorage.getItem('ft.dirty.v1') ?? '[]') + (localStorage.getItem('ft.dirtyEvents.v1') ?? '[]')), { timeout: 10_000 }).toBe('[][]');
 
   const ctx = await browser.newContext();
   const p2 = await ctx.newPage();

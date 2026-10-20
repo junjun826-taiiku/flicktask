@@ -221,7 +221,8 @@ test('details sync to the server and show up on another device @local', async ({
   await ready(page);
   await add(page, '同期テスト');
   await detail(page, '同期テスト', { note: '端末をまたぐ', due: [day, '12:00'], plan: [day, '08:00', '09:00'] });
-  await page.waitForTimeout(900);
+  // wait until this device has pushed everything (no pending changes), not a fixed time
+  await expect.poll(() => page.evaluate(() => (localStorage.getItem('ft.dirty.v1') ?? '[]') + (localStorage.getItem('ft.dirtyEvents.v1') ?? '[]')), { timeout: 10_000 }).toBe('[][]');
 
   const other = await browser.newContext();
   const p2 = await other.newPage();
