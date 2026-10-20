@@ -4,6 +4,8 @@
   import { router } from './lib/router.svelte';
   import MonthView from './MonthView.svelte';
   import DayView from './DayView.svelte';
+  import EventList from './EventList.svelte';
+  import EventDetail from './EventDetail.svelte';
 
   const r = $derived(router.route);
 
@@ -19,7 +21,7 @@
   class="cal-screen"
   in:fly|global={{ x: '100%', duration: 460, easing: cubicOut, opacity: 1 }}
   out:fly|global={{ x: '100%', duration: 360, easing: cubicOut, opacity: 1 }}
-  data-testid="calendar"
+  data-testid={r.name === 'month' || r.name === 'day' ? 'calendar' : 'event-screen'}
 >
   <div class="cal-inner">
     {#if r.name === 'month'}
@@ -30,6 +32,16 @@
       <div class="cal-page" in:fly={{ x: 60, duration: 420, easing: cubicOut }}>
         <DayView date={r.date} />
       </div>
+    {:else if r.name === 'events'}
+      <div class="cal-page" in:fly={{ x: -40 * router.dir, duration: 380, easing: cubicOut }}>
+        <EventList />
+      </div>
+    {:else if r.name === 'event'}
+      {#key r.id}
+        <div class="cal-page" in:fly={{ x: 60 * router.dir, duration: 420, easing: cubicOut }}>
+          <EventDetail id={r.id} tab={r.tab} />
+        </div>
+      {/key}
     {/if}
   </div>
 </div>

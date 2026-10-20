@@ -1,19 +1,49 @@
-// Minimal History-API router: "/" (memo + list), "/calendar?m=YYYY-MM-01" (month), "/calendar/YYYY-MM-DD" (day).
+// Minimal History-API router:
+//   "/"                          memo + lists
+//   "/calendar?m=YYYY-MM-01"     month          "/calendar/YYYY-MM-DD"  day
+//   "/events"                    イベント一覧    "/events/:id?tab=…"     イベント詳細
+//   "/events/:id/live"           当日モード
 // history.state.depth counts screens pushed by the app, so in-app Back pops real history entries
 // (the OS/browser back gesture then behaves the same), and a deep link falls back to the parent screen.
 import { isValidYmd, monthOf, today } from './dates';
 
-export type Route = { name: 'home' } | { name: 'month'; month: string } | { name: 'day'; date: string };
+export type EventTab = 'prep' | 'day' | 'sched';
+export type Route =
+  | { name: 'home' }
+  | { name: 'month'; month: string }
+  | { name: 'day'; date: string }
+  | { name: 'events' }
+  | { name: 'event'; id: string; tab: EventTab }
+  | { name: 'live'; id: string };
 
 function parse(): Route {
-  const m = location.pathname.match(/^\/calendar(?:\/(\d{4}-\d{2}-\d{2}))?\/?$/);
+  const p = location.pathname;
+  const q = new URLSearchParams(location.search);
+  const ev = p.match(/^\/events(?:\/([^/]+)(\/live)?)?\/?$/);
+  if (ev) {
+    if (!ev[1]) return { name: 'events' };
+    const id = decodeURIComponent(ev[1]);
+    if (ev[2]) return { name: 'live', id };
+    const tab = q.get('tab');
+    return { name: 'event', id, tab: tab === 'day' || tab === 'sched' ? tab : 'prep' };
+  }
+  const m = p.match(/^\/calendar(?:\/(\d{4}-\d{2}-\d{2}))?\/?$/);
   if (!m) return { name: 'home' };
   if (m[1] && isValidYmd(m[1])) return { name: 'day', date: m[1] };
-  const q = new URLSearchParams(location.search).get('m');
-  return { name: 'month', month: isValidYmd(q) ? monthOf(q) : monthOf(today()) };
+  const mq = q.get('m');
+  return { name: 'month', month: isValidYmd(mq) ? monthOf(mq) : monthOf(today()) };
 }
 
 const depth = () => (history.state?.depth as number) ?? 0;
+/** How deep a screen sits; decides slide direction on Back/Forward. */
+const rank = (r: Route) => ({ home: 0, month: 1, events: 1, day: 2, event: 2, live: 3 })[r.name];
+/** Where a deep-linked screen's own Back button goes when there is no app history to pop. */
+function parentUrl(r: Route, month: string) {
+  if (r.name === 'day') return `/calendar?m=${month}`;
+  if (r.name === 'event') return '/events';
+  if (r.name === 'live') return `/events/${encodeURIComponent(r.id)}?tab=day`;
+  return '/';
+}
 
 class Router {
   route = $state<Route>(parse());
@@ -57,14 +87,29 @@ class Router {
     this.month = monthOf(date);
     this.#set(`/calendar/${date}`, dir, 'replace');
   }
+  openEvents() {
+    this.#set('/events', 1, 'push');
+  }
+  openEvent(id: string, tab: EventTab = 'prep') {
+    this.#set(`/events/${encodeURIComponent(id)}${tab === 'prep' ? '' : `?tab=${tab}`}`, 1, 'push');
+  }
+  /** Switching tabs replaces the entry (Back leaves the event rather than stepping through tabs). */
+  setEventTab(id: string, tab: EventTab) {
+    this.#set(`/events/${encodeURIComponent(id)}${tab === 'prep' ? '' : `?tab=${tab}`}`, 1, 'replace');
+  }
+  openLive(id: string) {
+    this.#set(`/events/${encodeURIComponent(id)}/live`, 1, 'push');
+  }
   back() {
     if (depth() > 0) return history.back();
     // deep-linked: replace with the parent screen
-    if (this.route.name === 'day') this.#set(`/calendar?m=${this.month}`, -1, 'replace');
-    else this.#set('/', -1, 'replace');
+    this.#set(parentUrl(this.route, this.month), -1, 'replace');
+  }
+  /** Leave whatever overlay is open and return to the memo screen. */
+  home() {
+    if (depth() > 0) return history.go(-depth());
+    this.#set('/', -1, 'replace');
   }
 }
-
-const rank = (r: Route) => (r.name === 'home' ? 0 : r.name === 'month' ? 1 : 2);
 
 export const router = new Router();

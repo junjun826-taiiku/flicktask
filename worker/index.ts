@@ -159,8 +159,20 @@ app.get('/api/live', (c) => {
 });
 
 const TASK_COLS =
-  'id, title, status, created_at, updated_at, deleted, note, due_date, due_time, plan_date, plan_start, plan_end, kind, plan_end_date';
-const rows = (results: any[]) => results.map((t) => ({ ...t, deleted: !!t.deleted }));
+  'id, title, status, created_at, updated_at, deleted, note, due_date, due_time, plan_date, plan_start, plan_end, kind, plan_end_date, event_id, roles, place, items';
+const EVENT_COLS = 'id, name, start_date, end_date, place, color, roles, note, closed, created_at, updated_at, deleted';
+const parseJson = (s: unknown) => {
+  try {
+    return typeof s === 'string' ? JSON.parse(s) : [];
+  } catch {
+    return [];
+  }
+};
+const rows = (results: any[]) => results.map((t) => ({ ...t, deleted: !!t.deleted, roles: parseJson(t.roles) }));
+const eventRows = (results: any[]) =>
+  results.map((e) => ({ ...e, deleted: !!e.deleted, closed: !!e.closed, roles: parseJson(e.roles) }));
+/** SQL for "tasks belonging to an event that is still running" — always part of a device's working set. */
+const ACTIVE_EVENT_TASK = `event_id IN (SELECT id FROM events WHERE user_id = tasks.user_id AND closed = 0 AND deleted = 0)`;
 
 /** Deleted rows are purged from the server this long after deletion; older cursors must resync in full. */
 const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -191,21 +203,25 @@ app.get('/api/tasks/changes', async (c) => {
   const cutoff = Number(c.req.query('cutoff') ?? '') || now - 60 * 86_400_000;
   const cursor = now - CURSOR_SKEW_MS;
   if (since && since > now - TOMBSTONE_TTL_MS) {
-    const { results } = await c.env.DB.prepare(`SELECT ${TASK_COLS} FROM tasks WHERE user_id = ? AND synced_at > ?`)
-      .bind(userId, since)
-      .all();
-    return c.json({ tasks: rows(results), cursor, reset: false });
+    const [t, e] = await c.env.DB.batch([
+      c.env.DB.prepare(`SELECT ${TASK_COLS} FROM tasks WHERE user_id = ? AND synced_at > ?`).bind(userId, since),
+      c.env.DB.prepare(`SELECT ${EVENT_COLS} FROM events WHERE user_id = ? AND synced_at > ?`).bind(userId, since),
+    ]);
+    return c.json({ tasks: rows(t.results), events: eventRows(e.results), cursor, reset: false });
   }
   if (!isDate(from) || !from) return c.json({ error: 'bad from' }, 400);
-  const { results } = await c.env.DB.prepare(
-    `SELECT ${TASK_COLS} FROM tasks WHERE user_id = ?3 AND deleted = 0 AND (
-       (kind = 'event' AND COALESCE(plan_end_date, plan_date, '9999-12-31') >= ?1)
-       OR (kind = 'task' AND (status != 'done' OR updated_at >= ?2
-            OR COALESCE(plan_end_date, plan_date, '') >= ?1 OR COALESCE(due_date, '') >= ?1)))`,
-  )
-    .bind(from, cutoff, userId)
-    .all();
-  return c.json({ tasks: rows(results), cursor, reset: true });
+  const [t, e] = await c.env.DB.batch([
+    c.env.DB.prepare(
+      `SELECT ${TASK_COLS} FROM tasks WHERE user_id = ?3 AND deleted = 0 AND (
+         ${ACTIVE_EVENT_TASK}
+         OR (kind = 'event' AND COALESCE(plan_end_date, plan_date, '9999-12-31') >= ?1)
+         OR (kind = 'task' AND (status != 'done' OR updated_at >= ?2
+              OR COALESCE(plan_end_date, plan_date, '') >= ?1 OR COALESCE(due_date, '') >= ?1)))`,
+    ).bind(from, cutoff, userId),
+    // events are few: a device always has all of them
+    c.env.DB.prepare(`SELECT ${EVENT_COLS} FROM events WHERE user_id = ? AND deleted = 0`).bind(userId),
+  ]);
+  return c.json({ tasks: rows(t.results), events: eventRows(e.results), cursor, reset: true });
 });
 
 /** Older items for a calendar range outside the device's working set (e.g. last year's months). */
@@ -219,6 +235,14 @@ app.get('/api/tasks/range', async (c) => {
        OR (due_date IS NOT NULL AND due_date BETWEEN ?1 AND ?2))`,
   )
     .bind(from, to, c.get('user').id)
+    .all();
+  return c.json(rows(results));
+});
+
+/** All of one event's items (for a finished event whose tasks are no longer on the device). */
+app.get('/api/events/:id/tasks', async (c) => {
+  const { results } = await c.env.DB.prepare(`SELECT ${TASK_COLS} FROM tasks WHERE user_id = ? AND event_id = ? AND deleted = 0`)
+    .bind(c.get('user').id, c.req.param('id'))
     .all();
   return c.json(rows(results));
 });
@@ -238,7 +262,27 @@ type TaskIn = {
   plan_end?: string | null;
   plan_end_date?: string | null;
   kind?: 'task' | 'event';
+  event_id?: string | null;
+  roles?: string[];
+  place?: string;
+  items?: string;
 };
+
+type EventIn = {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  place?: string;
+  color?: string;
+  roles?: { name: string; color: string }[];
+  note?: string;
+  closed?: boolean;
+  created_at: number;
+  updated_at: number;
+  deleted?: boolean;
+};
+const COLORS = ['blue', 'orange', 'violet', 'pink', 'green', 'teal', 'gray'];
 
 const isDate = (v: unknown) => v == null || (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v));
 const isTime = (v: unknown) => v == null || (typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v));
@@ -253,7 +297,57 @@ function invalid(t: TaskIn): string | null {
   if (t.plan_end_date && (!t.plan_date || t.plan_end_date < t.plan_date)) return 'bad range';
   if (!isTime(t.due_time) || !isTime(t.plan_start) || !isTime(t.plan_end)) return 'bad time';
   if (t.kind != null && t.kind !== 'task' && t.kind !== 'event') return 'bad kind';
+  if (t.event_id != null && (typeof t.event_id !== 'string' || t.event_id.length > 64)) return 'bad event';
+  if (t.roles != null && (!Array.isArray(t.roles) || t.roles.length > 20 || t.roles.some((r) => typeof r !== 'string' || r.length > 30)))
+    return 'bad roles';
+  if (t.place != null && (typeof t.place !== 'string' || t.place.length > 200)) return 'bad place';
+  if (t.items != null && (typeof t.items !== 'string' || t.items.length > 1000)) return 'bad items';
   return null;
+}
+
+function invalidEvent(e: EventIn): string | null {
+  if (typeof e.id !== 'string' || !e.id || e.id.length > 64) return 'bad id';
+  if (typeof e.name !== 'string' || !e.name.trim() || e.name.length > 200) return 'bad name';
+  if (!e.start_date || !e.end_date || !isDate(e.start_date) || !isDate(e.end_date) || e.end_date < e.start_date) return 'bad dates';
+  if (e.place != null && (typeof e.place !== 'string' || e.place.length > 200)) return 'bad place';
+  if (e.color != null && !COLORS.includes(e.color)) return 'bad color';
+  if (
+    e.roles != null &&
+    (!Array.isArray(e.roles) ||
+      e.roles.length > 20 ||
+      e.roles.some((r) => !r || typeof r.name !== 'string' || !r.name.trim() || r.name.length > 30 || !COLORS.includes(r.color)))
+  )
+    return 'bad roles';
+  if (e.note != null && (typeof e.note !== 'string' || e.note.length > 20000)) return 'bad note';
+  return null;
+}
+
+function upsertEvent(db: D1Database, userId: string, e: EventIn, now: number) {
+  return db
+    .prepare(
+      `INSERT INTO events (id, user_id, name, start_date, end_date, place, color, roles, note, closed, created_at, updated_at, deleted, synced_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET name = excluded.name, start_date = excluded.start_date, end_date = excluded.end_date,
+         place = excluded.place, color = excluded.color, roles = excluded.roles, note = excluded.note, closed = excluded.closed,
+         updated_at = excluded.updated_at, deleted = excluded.deleted, synced_at = excluded.synced_at
+       WHERE events.user_id = excluded.user_id AND excluded.updated_at > events.updated_at`,
+    )
+    .bind(
+      e.id,
+      userId,
+      e.name.trim(),
+      e.start_date,
+      e.end_date,
+      e.place ?? '',
+      e.color ?? 'blue',
+      JSON.stringify((e.roles ?? []).map((r) => ({ name: r.name.trim(), color: r.color }))),
+      e.note ?? '',
+      e.closed ? 1 : 0,
+      Math.floor(Number(e.created_at)) || now,
+      Math.floor(Number(e.updated_at)) || now,
+      e.deleted ? 1 : 0,
+      now,
+    );
 }
 
 /** Last-write-wins upsert (client updated_at), stamped with the server clock for incremental sync. */
@@ -261,13 +355,15 @@ function upsert(db: D1Database, userId: string, t: TaskIn, now: number) {
   return db
     .prepare(
       `INSERT INTO tasks (id, user_id, title, status, created_at, updated_at, deleted,
-         note, due_date, due_time, plan_date, plan_start, plan_end, kind, plan_end_date, synced_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         note, due_date, due_time, plan_date, plan_start, plan_end, kind, plan_end_date, synced_at,
+         event_id, roles, place, items)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status,
          updated_at = excluded.updated_at, deleted = excluded.deleted, note = excluded.note,
          due_date = excluded.due_date, due_time = excluded.due_time,
          plan_date = excluded.plan_date, plan_start = excluded.plan_start, plan_end = excluded.plan_end,
-         kind = excluded.kind, plan_end_date = excluded.plan_end_date, synced_at = excluded.synced_at
+         kind = excluded.kind, plan_end_date = excluded.plan_end_date, synced_at = excluded.synced_at,
+         event_id = excluded.event_id, roles = excluded.roles, place = excluded.place, items = excluded.items
        WHERE tasks.user_id = excluded.user_id AND excluded.updated_at > tasks.updated_at`,
     )
     .bind(
@@ -288,34 +384,49 @@ function upsert(db: D1Database, userId: string, t: TaskIn, now: number) {
       // a range that ends on its start day is just a single day
       t.plan_date && t.plan_end_date && t.plan_end_date > t.plan_date ? t.plan_end_date : null,
       now,
+      t.event_id ?? null,
+      JSON.stringify((t.roles ?? []).map((r) => r.trim()).filter(Boolean)),
+      t.place ?? '',
+      t.items ?? '',
     );
 }
 
 // Batch upsert. Lets the local-first client push its queue in one request.
 app.post('/api/tasks/sync', async (c) => {
-  const body = (await c.req.json()) as { tasks: TaskIn[] };
+  const body = (await c.req.json()) as { tasks?: TaskIn[]; events?: EventIn[] };
   const userId = c.get('user').id;
   const tasks = (body.tasks ?? []).slice(0, 500);
+  const events = (body.events ?? []).slice(0, 100);
   for (const t of tasks) {
     const err = invalid(t);
     if (err) return c.json({ error: err }, 400);
   }
-  const now = Date.now();
-  const results = tasks.length ? await c.env.DB.batch(tasks.map((t) => upsert(c.env.DB, userId, t, now))) : [];
-  // rows the server kept its own (newer) version of: send that version back so the device converges
-  const rejected = tasks.filter((_, i) => !results[i]?.meta.changes).map((t) => t.id);
-  let stale: unknown[] = [];
-  if (rejected.length) {
-    const { results: current } = await c.env.DB.prepare(
-      `SELECT ${TASK_COLS} FROM tasks WHERE user_id = ? AND id IN (${rejected.map(() => '?').join(',')})`,
-    )
-      .bind(userId, ...rejected)
-      .all();
-    stale = rows(current);
+  for (const e of events) {
+    const err = invalidEvent(e);
+    if (err) return c.json({ error: err }, 400);
   }
+  const now = Date.now();
+  const db = c.env.DB;
+  const results = tasks.length + events.length
+    ? await db.batch([...events.map((e) => upsertEvent(db, userId, e, now)), ...tasks.map((t) => upsert(db, userId, t, now))])
+    : [];
+  // rows the server kept its own (newer) version of: send that version back so the device converges
+  const rejectedEvents = events.filter((_, i) => !results[i]?.meta.changes).map((e) => e.id);
+  const rejected = tasks.filter((_, i) => !results[events.length + i]?.meta.changes).map((t) => t.id);
+  const inList = (ids: string[]) => ids.map(() => '?').join(',');
+  const stale = rejected.length
+    ? rows((await db.prepare(`SELECT ${TASK_COLS} FROM tasks WHERE user_id = ? AND id IN (${inList(rejected)})`).bind(userId, ...rejected).all()).results)
+    : [];
+  const staleEvents = rejectedEvents.length
+    ? eventRows(
+        (await db.prepare(`SELECT ${EVENT_COLS} FROM events WHERE user_id = ? AND id IN (${inList(rejectedEvents)})`).bind(userId, ...rejectedEvents).all())
+          .results,
+      )
+    : [];
   // tell the user's other open devices to pull (fire-and-forget; the save already succeeded)
-  if (tasks.length > rejected.length) c.executionCtx.waitUntil(hub(c).changed(c.req.header('x-client-id') ?? '').catch(() => 0));
-  return c.json({ ok: true, count: tasks.length, stale });
+  if (tasks.length + events.length > rejected.length + rejectedEvents.length)
+    c.executionCtx.waitUntil(hub(c).changed(c.req.header('x-client-id') ?? '').catch(() => 0));
+  return c.json({ ok: true, count: tasks.length + events.length, stale, staleEvents });
 });
 
 // ---------- backup ----------
@@ -323,48 +434,82 @@ app.post('/api/tasks/sync', async (c) => {
 /** Everything the account has (not deleted), as one JSON file. */
 app.get('/api/export', async (c) => {
   const user = c.get('user');
-  const { results } = await c.env.DB.prepare(`SELECT ${TASK_COLS} FROM tasks WHERE user_id = ? AND deleted = 0 ORDER BY created_at`)
-    .bind(user.id)
-    .all();
+  const [t, e] = await c.env.DB.batch([
+    c.env.DB.prepare(`SELECT ${TASK_COLS} FROM tasks WHERE user_id = ? AND deleted = 0 ORDER BY created_at`).bind(user.id),
+    c.env.DB.prepare(`SELECT ${EVENT_COLS} FROM events WHERE user_id = ? AND deleted = 0 ORDER BY start_date`).bind(user.id),
+  ]);
   const stamp = new Date().toISOString().slice(0, 10).replaceAll('-', '');
   c.header('content-disposition', `attachment; filename="flick-backup-${stamp}.json"`);
-  return c.json({ app: 'flick', version: 1, exported_at: new Date().toISOString(), account: user.email, tasks: rows(results) });
+  return c.json({
+    app: 'flick',
+    version: 2,
+    exported_at: new Date().toISOString(),
+    account: user.email,
+    events: eventRows(e.results),
+    tasks: rows(t.results),
+  });
 });
+
+/** Which of these ids exist in `table`, and which account owns each. */
+async function owners(db: D1Database, table: 'tasks' | 'events', ids: string[]) {
+  const out = new Map<string, string>();
+  for (let i = 0; i < ids.length; i += 90) {
+    const chunk = ids.slice(i, i + 90);
+    const { results } = await db
+      .prepare(`SELECT id, user_id FROM ${table} WHERE id IN (${chunk.map(() => '?').join(',')})`)
+      .bind(...chunk)
+      .all<{ id: string; user_id: string }>();
+    for (const r of results) out.set(r.id, r.user_id);
+  }
+  return out;
+}
 
 /**
  * Restore a backup into the signed-in account. Rows whose id already belongs to ANOTHER account
- * (e.g. moving data from last year's 幹部 account) get a fresh id; the rest merge last-write-wins.
+ * (e.g. moving data from last year's 幹部 account) get a fresh id — events too, with their tasks
+ * re-linked — and the rest merge last-write-wins.
  */
 app.post('/api/import', async (c) => {
-  const body = (await c.req.json().catch(() => null)) as { app?: string; tasks?: TaskIn[] } | null;
+  const body = (await c.req.json().catch(() => null)) as { app?: string; tasks?: TaskIn[]; events?: EventIn[] } | null;
   if (!body || body.app !== 'flick' || !Array.isArray(body.tasks)) return c.json({ error: 'not a Flick backup' }, 400);
-  const tasks = body.tasks.slice(0, 20000).filter((t) => !t.deleted);
+  let tasks = body.tasks.slice(0, 20000).filter((t) => !t.deleted);
+  let events = (Array.isArray(body.events) ? body.events : []).slice(0, 2000).filter((e) => !e.deleted);
   for (const t of tasks) {
     const err = invalid(t);
     if (err) return c.json({ error: `${err}: ${String(t.title ?? '').slice(0, 40)}` }, 400);
   }
+  for (const e of events) {
+    const err = invalidEvent(e);
+    if (err) return c.json({ error: `${err}: ${String(e.name ?? '').slice(0, 40)}` }, 400);
+  }
   const userId = c.get('user').id;
   const db = c.env.DB;
-  // which ids exist, and for whom
-  const owners = new Map<string, string>();
-  for (let i = 0; i < tasks.length; i += 90) {
-    const ids = tasks.slice(i, i + 90).map((t) => t.id);
-    const { results } = await db
-      .prepare(`SELECT id, user_id FROM tasks WHERE id IN (${ids.map(() => '?').join(',')})`)
-      .bind(...ids)
-      .all<{ id: string; user_id: string }>();
-    for (const r of results) owners.set(r.id, r.user_id);
-  }
   let added = 0;
   let merged = 0;
-  const now = Date.now();
-  const stmts = tasks.map((t) => {
-    const owner = owners.get(t.id);
-    if (owner && owner !== userId) (t = { ...t, id: crypto.randomUUID() }), added++;
-    else if (owner) merged++;
-    else added++;
-    return upsert(db, userId, t, now);
+  const count = (owner: string | undefined) => (owner === userId ? merged++ : added++);
+
+  const eventOwners = await owners(db, 'events', events.map((e) => e.id));
+  const newEventId = new Map<string, string>();
+  events = events.map((e) => {
+    const owner = eventOwners.get(e.id);
+    count(owner);
+    if (owner && owner !== userId) {
+      const id = crypto.randomUUID();
+      newEventId.set(e.id, id);
+      return { ...e, id };
+    }
+    return e;
   });
+  const taskOwners = await owners(db, 'tasks', tasks.map((t) => t.id));
+  tasks = tasks.map((t) => {
+    const owner = taskOwners.get(t.id);
+    count(owner);
+    const event_id = t.event_id ? (newEventId.get(t.event_id) ?? t.event_id) : null;
+    return owner && owner !== userId ? { ...t, id: crypto.randomUUID(), event_id } : { ...t, event_id };
+  });
+
+  const now = Date.now();
+  const stmts = [...events.map((e) => upsertEvent(db, userId, e, now)), ...tasks.map((t) => upsert(db, userId, t, now))];
   for (let i = 0; i < stmts.length; i += 200) await db.batch(stmts.slice(i, i + 200));
   if (stmts.length) c.executionCtx.waitUntil(hub(c).changed('').catch(() => 0));
   return c.json({ ok: true, added, merged });
@@ -556,6 +701,7 @@ async function cleanup(env: Env) {
   const now = Date.now();
   await env.DB.batch([
     env.DB.prepare('DELETE FROM tasks WHERE deleted = 1 AND synced_at < ?').bind(now - TOMBSTONE_TTL_MS),
+    env.DB.prepare('DELETE FROM events WHERE deleted = 1 AND synced_at < ?').bind(now - TOMBSTONE_TTL_MS),
     env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(Math.floor(now / 1000)),
   ]);
 }

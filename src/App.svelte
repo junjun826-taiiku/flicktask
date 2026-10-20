@@ -11,6 +11,8 @@
   import TaskCard from './TaskCard.svelte';
   import Account from './Account.svelte';
   import TaskSheet from './TaskSheet.svelte';
+  import EventSheet from './EventSheet.svelte';
+  import EventSwitcher from './EventSwitcher.svelte';
   import CalendarScreen from './CalendarScreen.svelte';
   import { router } from './lib/router.svelte';
   import ScheduleList from './ScheduleList.svelte';
@@ -51,6 +53,9 @@
     </div>
     <div class="top-actions">
       {#if store.ready}
+        <button class="cal-btn glass" onclick={() => router.openEvents()} aria-label="イベント" data-testid="open-events" in:scale|global={{ start: 0.6, duration: 450, easing: backOut }}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6" /></svg>
+        </button>
         <button class="cal-btn glass" onclick={() => router.openMonth()} aria-label="カレンダー" data-testid="open-calendar" in:scale|global={{ start: 0.6, duration: 450, easing: backOut }}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3.5" /><path d="M3.5 10h17M8.5 3v4M15.5 3v4" /></svg>
           <span>{new Date().getDate()}</span>
@@ -61,6 +66,8 @@
   </header>
 
   <Composer bind:this={composer} />
+
+  {#if store.ready}<EventSwitcher />{/if}
 
   <div class="pane-switch glass" role="tablist" aria-label="表示" style="--i:{store.pane === 'tasks' ? 0 : 1}">
     <span class="pane-thumb" aria-hidden="true"></span>
@@ -119,6 +126,7 @@
 {/if}
 
 <TaskSheet />
+<EventSheet />
 
 <div class="toasts" aria-live="polite">
   {#each toasts.items as t (t.id)}

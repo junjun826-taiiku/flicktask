@@ -79,3 +79,26 @@ export function dueState(date: string | null, time: string | null): 'over' | 'so
   if (date > t) return null;
   return time && toMin(time) < nowMin() ? 'over' : 'soon';
 }
+
+/** Whole days from today to `date` (negative = past). */
+export const daysUntil = (date: string) => Math.round((parseYmd(date).getTime() - parseYmd(today()).getTime()) / 86_400_000);
+
+/** "あと11日" / "本番当日" / "開催中" / "終了" for an イベント's dates. */
+export function countdown(start: string, end: string): { label: string; days: number | null; phase: 'before' | 'today' | 'during' | 'after' } {
+  const t = today();
+  if (t < start) {
+    const n = daysUntil(start);
+    return { label: `あと${n}日`, days: n, phase: 'before' };
+  }
+  if (t > end) return { label: '終了', days: null, phase: 'after' };
+  return t === start ? { label: '本番当日', days: 0, phase: 'today' } : { label: '開催中', days: 0, phase: 'during' };
+}
+
+/** "10/31(土)" or "10/31(土)〜11/1(日)" */
+export function rangeLabel(start: string, end: string) {
+  const f = (s: string) => {
+    const d = parseYmd(s);
+    return `${d.getMonth() + 1}/${d.getDate()}(${WD[d.getDay()]})`;
+  };
+  return start === end ? f(start) : `${f(start)}〜${f(end)}`;
+}

@@ -12,7 +12,7 @@ export default defineConfig({
   timeout: 45_000,
   expect: { timeout: 8_000 },
   fullyParallel: true,
-  workers: 4,
+  workers: 3, // 4 overloads a laptop running two dev servers; tests then time out rather than fail for real
   reporter: [['list']],
   use: { baseURL, trace: 'retain-on-failure' },
   // @local tests need the dev-only test login, which production (correctly) does not have

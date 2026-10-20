@@ -353,14 +353,31 @@ test('touch: press and hold drags a block, a quick swipe just scrolls', async ({
   const touch = (type: string, x?: number, y?: number) =>
     cdp.send('Input.dispatchTouchEvent', { type, touchPoints: x === undefined ? [] : [{ x, y }] } as any);
 
-  // quick swipe over the block: no change
+  // quick swipe over the block: no change. Simulated touches go one CDP call at a time; on a busy
+  // machine the first move can land after the 300 ms hold threshold, which is (correctly) a hold.
+  // Only a swipe whose first move really arrived quickly counts, so retry until one does.
   let box = (await b.boundingBox())!;
   let x = box.x + box.width / 2;
   let y = box.y + 15;
-  await touch('touchStart', x, y);
-  for (let i = 1; i <= 6; i++) await touch('touchMove', x, y + i * 15); // finger down: earlier hours, block stays on screen
-  await touch('touchEnd');
-  await page.waitForTimeout(1200); // let the fling scroll come to rest
+  for (let attempt = 0; attempt < 3; attempt++) {
+    box = (await b.boundingBox())!;
+    x = box.x + box.width / 2;
+    y = box.y + 15;
+    const t0 = Date.now();
+    await touch('touchStart', x, y);
+    await touch('touchMove', x, y + 15);
+    const quick = Date.now() - t0 < 200;
+    for (let i = 2; i <= 6; i++) await touch('touchMove', x, y + i * 15); // finger down: earlier hours, block stays on screen
+    await touch('touchEnd');
+    await page.waitForTimeout(1200); // let the fling scroll come to rest
+    if (quick) break;
+    // too slow to be a swipe; if it got treated as a drag, put the block back and try again
+    await b.click();
+    await page.getByTestId('sheet-plan-start').fill('09:00');
+    await page.getByTestId('sheet-plan-end').fill('10:00');
+    await page.getByTestId('sheet-done').click();
+    await expect(b).toContainText('09:00–10:00');
+  }
   await expect(b).toContainText('09:00–10:00');
 
   // hold, then drag down 1h

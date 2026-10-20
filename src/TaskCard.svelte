@@ -2,13 +2,13 @@
   import { onMount, tick } from 'svelte';
   import { scale } from 'svelte/transition';
   import { backOut } from 'svelte/easing';
-  import { store, STATUS_LABEL, STATUS_ORDER, type Task, type Status } from './lib/store.svelte';
+  import { store, STATUS_LABEL, STATUS_ORDER, COLOR_HEX, type Task, type Status } from './lib/store.svelte';
   import { toasts } from './lib/toast.svelte';
   import { vibrate } from './lib/motion';
   import { sheet } from './lib/sheet.svelte';
   import { dueState, shortLabel } from './lib/dates';
 
-  let { task, hint = false }: { task: Task; hint?: boolean } = $props();
+  let { task, hint = false, showEvent = true }: { task: Task; hint?: boolean; showEvent?: boolean } = $props();
 
   type Action = { kind: 'status'; to: Status } | { kind: 'delete' } | null;
 
@@ -124,6 +124,8 @@
     sheet.edit(task.id);
   }
   const due = $derived(dueState(task.due_date, task.due_time));
+  // which イベント it belongs to (shown only when the list isn't already narrowed to it)
+  const evt = $derived(!showEvent || store.currentEvent ? null : store.eventById(task.event_id));
 
   function onKey(e: KeyboardEvent) {
     if (e.target !== e.currentTarget) return;
@@ -225,8 +227,11 @@
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
     <div class="body" onclick={openDetail} data-testid="task-open">
       <span class="title" data-testid="task-title">{task.title}</span>
-      {#if task.due_date || task.plan_date || task.note}
+      {#if task.due_date || task.plan_date || task.note || evt}
         <span class="meta">
+          {#if evt}
+            <span class="chip ev-chip-mini" data-testid="chip-event"><i style="background:{COLOR_HEX[evt.color]}"></i>{evt.name}</span>
+          {/if}
           {#if task.plan_date}
             <span class="chip plan-chip" data-testid="chip-plan">
               <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2.5" /></svg>

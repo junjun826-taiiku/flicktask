@@ -50,7 +50,7 @@
       data-testid="month-grid"
     >
       {#each days as d, i (d)}
-        {@const items = monthItems(store.tasks, d)}
+        {@const items = monthItems(store.tasks, d, store.liveEvents)}
         {@const out = d.slice(0, 7) !== month.slice(0, 7)}
         {@const shown = items.length > fitAll ? fitWithMore : fitAll}
         <button
@@ -67,7 +67,7 @@
         >
           <span class="num">{Number(d.slice(8))}</span>
           {#each items.slice(0, shown) as it}
-            <span class="m-item {it.kind}" data-status={it.task.status} data-span={it.span} data-testid="m-{it.kind}">
+            <span class="m-item {it.kind}" data-status={it.task.status} data-span={it.span} style={it.color ? `--c:${it.color}` : undefined} data-testid="m-{it.kind}">
               {#if it.kind === 'due'}<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 11V1.5h6L7.8 4 9 6.5H3" /></svg>{/if}
               <!-- a multi-day bar is labelled on its first day and where it wraps onto a new week row -->
               <span class:quiet={it.span === 'mid' || (it.span === 'end' && i % 7 !== 0)}>{it.task.title}</span>

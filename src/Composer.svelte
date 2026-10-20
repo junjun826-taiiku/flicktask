@@ -130,7 +130,7 @@
       data-testid="composer-target"
     >
       {#key store.pane}
-        <span in:fly={{ y: 8, duration: 260, easing: backOut }}>→ {store.pane === 'tasks' ? 'タスク' : '予定'}</span>
+        <span in:fly={{ y: 8, duration: 260, easing: backOut }}>→ {store.currentEvent ? `${store.currentEvent.name}の` : ''}{store.pane === 'tasks' ? 'タスク' : '予定'}</span>
       {/key}
     </button>
     <button

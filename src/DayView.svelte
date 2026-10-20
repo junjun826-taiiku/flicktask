@@ -2,7 +2,7 @@
   import { onMount, tick, untrack } from 'svelte';
   import { fly, scale } from 'svelte/transition';
   import { backOut, cubicOut } from 'svelte/easing';
-  import { store, STATUS_LABEL } from './lib/store.svelte';
+  import { store, STATUS_LABEL, COLOR_HEX } from './lib/store.svelte';
   import { router } from './lib/router.svelte';
   import { sheet } from './lib/sheet.svelte';
   import { addDays, dayLabel, fromMin, nowMin, today } from './lib/dates';
@@ -17,6 +17,8 @@
   const blocks = $derived(layoutBlocks(store.tasks, date));
   const dues = $derived(timedDeadlines(store.tasks, date));
   const top = $derived(allDay(store.tasks, date));
+  // イベント held on this day (大会・行事)
+  const meets = $derived(store.liveEvents.filter((e) => e.start_date <= date && date <= e.end_date));
   const isToday = $derived(date === today());
   $effect(() => void store.loadRange(date, date)); // older days come from the server on demand
   let now = $state(nowMin());
@@ -160,10 +162,13 @@
 
 {#key date}
   <div class="day" in:fly={{ x: 70 * router.dir, duration: 420, easing: cubicOut }} {...swipe}>
-    {#if top.plans.length || top.dues.length}
+    {#if top.plans.length || top.dues.length || meets.length}
       <div class="allday" data-testid="allday">
         <span class="allday-label">終日</span>
         <div class="allday-items">
+          {#each meets as m (m.id)}
+            <button class="ad-meet" style="--c:{COLOR_HEX[m.color]}" onclick={() => router.openEvent(m.id)} data-testid="allday-meet">{m.name}</button>
+          {/each}
           {#each top.plans as t (t.id)}
             <button class="ad-plan" class:event={t.kind === 'event'} data-status={t.status} onclick={() => sheet.edit(t.id)} data-testid="allday-plan" in:scale={{ start: 0.8, duration: 380, easing: backOut }}>
               {t.title}

@@ -2,13 +2,13 @@
   import { tick, untrack } from 'svelte';
   import { fade, fly, slide } from 'svelte/transition';
   import { backOut, cubicOut } from 'svelte/easing';
-  import { store, STATUS_LABEL, STATUS_ORDER, type Details } from './lib/store.svelte';
+  import { store, STATUS_LABEL, STATUS_ORDER, COLOR_HEX, type Details } from './lib/store.svelte';
   import { sheet } from './lib/sheet.svelte';
   import { toasts } from './lib/toast.svelte';
   import { fromMin, toMin, today } from './lib/dates';
   import { vibrate } from './lib/motion';
 
-  const blank = (): Details => ({ title: '', status: 'todo', kind: 'task', note: '', due_date: null, due_time: null, plan_date: null, plan_start: null, plan_end: null, plan_end_date: null });
+  const blank = (): Details => ({ title: '', status: 'todo', kind: 'task', note: '', due_date: null, due_time: null, plan_date: null, plan_start: null, plan_end: null, plan_end_date: null, event_id: store.currentEvent?.id ?? null, roles: [], place: '', items: '' });
   const isEvent = $derived(draft.kind === 'event');
   /** position of the sliding thumb: the three statuses, then 予定 (calendar only) */
   const pickIndex = $derived(isEvent ? 3 : STATUS_ORDER.indexOf(draft.status));
@@ -16,6 +16,13 @@
   const multiDay = $derived(isEvent && !!draft.plan_end_date && !!draft.plan_date && draft.plan_end_date > draft.plan_date);
 
   let draft = $state<Details>(blank());
+  /** the イベント this belongs to, and whether it's a 当日の動き (a timed task on one of its days) */
+  const ev = $derived(store.eventById(draft.event_id));
+  const isMoveDraft = $derived(!!ev && !isEvent && !!draft.plan_date && !!draft.plan_start && ev.start_date <= draft.plan_date && draft.plan_date <= ev.end_date);
+  const pickable = $derived(store.activeEvents.filter((e) => e.end_date >= today() || e.id === draft.event_id));
+  function toggleRole(name: string) {
+    draft.roles = draft.roles.includes(name) ? draft.roles.filter((r) => r !== name) : [...draft.roles, name];
+  }
   let isNew = $state(false);
   let dy = $state(0);
   let dragging = $state(false);
@@ -34,7 +41,7 @@
     const t = id ? store.tasks.find((x) => x.id === id) : null;
     isNew = !t;
     draft = t
-      ? { title: t.title, status: t.status, kind: t.kind, note: t.note, due_date: t.due_date, due_time: t.due_time, plan_date: t.plan_date, plan_start: t.plan_start, plan_end: t.plan_end, plan_end_date: t.plan_end_date }
+      ? { title: t.title, status: t.status, kind: t.kind, note: t.note, due_date: t.due_date, due_time: t.due_time, plan_date: t.plan_date, plan_start: t.plan_start, plan_end: t.plan_end, plan_end_date: t.plan_end_date, event_id: t.event_id, roles: [...t.roles], place: t.place, items: t.items }
       : { ...blank(), ...sheet.prefill };
     dy = 0;
     tick().then(() => {
@@ -210,6 +217,17 @@
         <p class="kind-hint" transition:slide={{ duration: 240 }}>カレンダーとスケジュールにだけ表示されます</p>
       {/if}
 
+      {#if pickable.length}
+        <div class="ev-pick" role="radiogroup" aria-label="イベント" data-testid="sheet-event">
+          <button role="radio" aria-checked={!draft.event_id} class:on={!draft.event_id} onclick={() => (draft.event_id = null)}>なし</button>
+          {#each pickable as e (e.id)}
+            <button role="radio" aria-checked={draft.event_id === e.id} class:on={draft.event_id === e.id} onclick={() => (draft.event_id = e.id)} data-testid="sheet-event-option">
+              <i style="background:{COLOR_HEX[e.color]}"></i>{e.name}
+            </button>
+          {/each}
+        </div>
+      {/if}
+
       <label class="field note">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 11h14M5 16h9" /></svg>
         <textarea
@@ -281,6 +299,36 @@
           </div>
         {/if}
       </section>
+
+      <!-- 当日の動き (a timed task on one of its イベント's days): who does it, where, with what -->
+      {#if isMoveDraft && ev}
+        <section class="field-group move" transition:slide={{ duration: 280, easing: cubicOut }} data-testid="sheet-move">
+          <div class="move-row">
+            <span class="move-label">担当</span>
+            <div class="move-roles">
+              <button class="role-toggle" class:on={draft.roles.length === 0} onclick={() => (draft.roles = [])} data-testid="sheet-role-all">全員</button>
+              {#each ev.roles as r}
+                <button
+                  class="role-toggle"
+                  class:on={draft.roles.includes(r.name)}
+                  style="--c:{COLOR_HEX[r.color]}"
+                  aria-pressed={draft.roles.includes(r.name)}
+                  onclick={() => toggleRole(r.name)}
+                  data-testid="sheet-role">{r.name}</button
+                >
+              {/each}
+            </div>
+          </div>
+          <label class="move-row">
+            <span class="move-label">場所</span>
+            <input bind:value={draft.place} placeholder="正面玄関など" data-testid="sheet-place" />
+          </label>
+          <label class="move-row">
+            <span class="move-label">持ち物</span>
+            <input bind:value={draft.items} placeholder="名簿、ペン…（読点区切り）" data-testid="sheet-items" />
+          </label>
+        </section>
+      {/if}
     </div>
   </div>
 {/if}
