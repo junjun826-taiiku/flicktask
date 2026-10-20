@@ -281,3 +281,6 @@
 .m-item.event { color: #06403f; background: #c9f0ee; box-shadow: inset 2px 0 0 var(--event); }
 .ad-plan.event, .ad-plan.event[data-status] { opacity: 1; color: #06403f; background: #c9f0ee; box-shadow: inset 3px 0 0 var(--event); }
 .lg-event { background: #c9f0ee; box-shadow: inset 3px 0 0 var(--event); }
+
+/* live connection down: grey dot (local edits still save and sync on reconnect) */
+.sync.offline:not(.on) { background: #b4b9c5; }

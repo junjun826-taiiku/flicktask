@@ -16,5 +16,8 @@
     }
   ],
   "ai": { "binding": "AI" },
+  // real-time: one UserHub per account relays "data changed" to the user's other devices
+  "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "UserHub" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserHub"] }],
   "observability": { "enabled": true }
 }

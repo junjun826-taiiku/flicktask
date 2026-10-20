@@ -22,6 +22,6 @@ export default defineConfig({
     { name: 'mobile', use: { ...devices['Pixel 7'] }, testIgnore: isLocal ? /prod\.spec/ : /.*/ },
   ],
   webServer: isLocal
-    ? { command: 'npx vite --port 5173 --strictPort', url: baseURL, reuseExistingServer: true, timeout: 120_000 }
+    ? { command: `npx vite --port ${new URL(baseURL).port || 5173} --strictPort`, url: baseURL, reuseExistingServer: true, timeout: 120_000 }
     : undefined,
 });

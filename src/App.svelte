@@ -14,6 +14,13 @@
   import CalendarScreen from './CalendarScreen.svelte';
   import { router } from './lib/router.svelte';
   import ScheduleList from './ScheduleList.svelte';
+  import { live } from './lib/live.svelte';
+
+  // real-time updates from the account's other devices while signed in
+  $effect(() => {
+    if (store.user) live.start();
+    else live.stop();
+  });
 
   let composer: Composer;
   let firstPaintDone = $state(false);
@@ -39,7 +46,7 @@
     <div class="date">
       <span>{today}</span>
       {#if store.user}
-        <span class="sync" class:on={store.syncing} aria-label={store.syncing ? '同期中' : '同期済み'} data-testid="sync-dot"></span>
+        <span class="sync" class:on={store.syncing} class:offline={live.status !== 'on'} aria-label={store.syncing ? '同期中' : '同期済み'} title={live.status === 'on' ? 'リアルタイム同期中' : '再接続中'} data-live={live.status} data-testid="sync-dot"></span>
       {/if}
     </div>
     <div class="top-actions">

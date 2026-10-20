@@ -1,5 +1,6 @@
 // Local-first task store: every change lands in localStorage immediately, then syncs to the Worker when signed in.
 import { stripBullet } from './bullets';
+import { clientId } from './client-id';
 
 export type Status = 'todo' | 'doing' | 'done';
 export type Task = {
@@ -161,7 +162,7 @@ class Store {
     try {
       const res = await fetch('/api/tasks/sync', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'x-client-id': clientId },
         body: JSON.stringify({ tasks: payload }),
       });
       if (res.status === 401) return this.#signedOut();
@@ -179,18 +180,48 @@ class Store {
     }
   }
 
-  async pull() {
-    const res = await fetch('/api/tasks');
+  #pulling: Promise<void> | null = null;
+  #pullAgain = false;
+  /** Fetch the server's copy and merge it in. Calls that arrive mid-pull collapse into one more pull. */
+  async pull(): Promise<void> {
+    if (this.#pulling) {
+      this.#pullAgain = true;
+      return this.#pulling;
+    }
+    this.#pulling = this.#pullOnce().finally(() => {
+      this.#pulling = null;
+      if (this.#pullAgain) {
+        this.#pullAgain = false;
+        this.pull();
+      }
+    });
+    return this.#pulling;
+  }
+
+  async #pullOnce() {
+    let res: Response;
+    try {
+      res = await fetch('/api/tasks');
+    } catch {
+      return; // offline
+    }
     if (res.status === 401) return this.#signedOut();
     if (!res.ok) return;
     const remote = ((await res.json()) as any[]).map(normalize);
     const byId = new Map(this.tasks.map((t) => [t.id, t]));
+    let changed = false;
     for (const r of remote) {
       const local = byId.get(r.id);
-      if (!local || (!this.dirty.has(r.id) && r.updated_at >= local.updated_at)) byId.set(r.id, r);
+      if (!local) {
+        this.tasks.push(r);
+        changed = true;
+      } else if (!this.dirty.has(r.id) && r.updated_at > local.updated_at) {
+        // update in place so open cards/sheets keep their identity
+        Object.assign(local, r);
+        changed = true;
+      }
     }
-    this.tasks = [...byId.values()];
-    this.#persist();
+    if (changed) this.#persist();
   }
 
   async init() {
@@ -207,10 +238,9 @@ class Store {
     }
     this.ready = true;
     addEventListener('online', () => this.scheduleSync(0));
+    // flush pending saves when the app goes to the background (pulling on return is live.svelte.ts's job)
     document.addEventListener('visibilitychange', () => {
-      if (!this.user) return;
-      if (document.visibilityState === 'hidden') this.push();
-      else this.pull();
+      if (this.user && document.visibilityState === 'hidden') this.push();
     });
   }
 

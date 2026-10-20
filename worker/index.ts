@@ -1,10 +1,13 @@
 import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { isBulleted, stripBullet } from '../src/lib/bullets';
+import type { UserHub } from './hub';
+export { UserHub } from './hub';
 
 type Env = {
   DB: D1Database;
   AI: Ai;
+  HUB: DurableObjectNamespace<UserHub>;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   /** "1" enables /auth/dev-login. Only honoured on localhost; never set in production. */
@@ -146,6 +149,15 @@ app.use('/api/*', async (c, next) => {
 
 app.get('/api/me', (c) => c.json(c.get('user')));
 
+/** The account's real-time hub (one Durable Object per user). */
+const hub = (c: { env: Env; get: (k: 'user') => User }) => c.env.HUB.get(c.env.HUB.idFromName(c.get('user').id));
+
+// WebSocket for "your data changed" pushes. Auth is the session cookie checked by the /api/* middleware.
+app.get('/api/live', (c) => {
+  if (c.req.header('Upgrade') !== 'websocket') return c.json({ error: 'expected websocket' }, 426);
+  return hub(c).fetch(c.req.raw);
+});
+
 app.get('/api/tasks', async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT id, title, status, created_at, updated_at, deleted, note, due_date, due_time, plan_date, plan_start, plan_end, kind
@@ -221,6 +233,8 @@ app.post('/api/tasks/sync', async (c) => {
       ),
     );
   }
+  // tell the user's other open devices to pull (fire-and-forget; the save already succeeded)
+  if (tasks.length) c.executionCtx.waitUntil(hub(c).changed(c.req.header('x-client-id') ?? '').catch(() => 0));
   return c.json({ ok: true, count: tasks.length });
 });
 
