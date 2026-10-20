@@ -8,6 +8,7 @@
   import type { AiSuggestion } from './lib/store.svelte';
   import { stripBullet } from './lib/bullets';
   import { sheet } from './lib/sheet.svelte';
+  import Icon from './Icon.svelte';
 
   let host: HTMLDivElement;
   let el: HTMLTextAreaElement | null = null;
@@ -169,7 +170,7 @@
               <span class="chip due-chip ai-due" class:off={!s.on} data-testid="ai-due" in:scale={{ start: 0.6, duration: 320, delay: 120 + i * 60, easing: backOut }}>
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 14V2.5M4 2.5h7.5L10 5.2l1.5 2.8H4" /></svg>
                 {shortLabel(s.due_date, s.due_time)}
-                <button class="ai-due-x" onclick={() => ((s.due_date = null), (s.due_time = null))} aria-label="期限を外す" data-testid="ai-due-remove">×</button>
+                <button class="ai-due-x" onclick={() => ((s.due_date = null), (s.due_time = null))} aria-label="期限を外す" data-testid="ai-due-remove"><Icon name="x" size={12} /></button>
               </span>
             {/if}
           </li>

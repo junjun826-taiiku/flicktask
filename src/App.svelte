@@ -9,6 +9,7 @@
   import Composer from './Composer.svelte';
   import Segmented from './Segmented.svelte';
   import TaskCard from './TaskCard.svelte';
+  import TaskGroups from './TaskGroups.svelte';
   import Account from './Account.svelte';
   import TaskSheet from './TaskSheet.svelte';
   import EventSheet from './EventSheet.svelte';
@@ -85,7 +86,9 @@
   <h2 class="pane-title">タスク</h2>
   <Segmented />
 
-  {#if store.ready}
+  {#if store.ready && !store.currentEvent && store.visible.some((t) => store.eventById(t.event_id))}
+  <div class="tgroups" data-testid="task-list"><TaskGroups /></div>
+  {:else if store.ready}
   <ul class="list" data-testid="task-list">
     {#each store.visible as task, i (task.id)}
       <li

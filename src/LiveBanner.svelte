@@ -6,6 +6,7 @@
   import { router } from './lib/router.svelte';
   import { fromMin, nowMin, today } from './lib/dates';
   import { dayRows, getRoles, inMinutes, mine, situation, eventDays } from './lib/liveMode';
+  import Icon from './Icon.svelte';
 
   let clock = $state(nowMin());
   onMount(() => {
@@ -30,6 +31,6 @@
         {#if s.now}いま：{s.now.task.title}{:else if s.next}{fromMin(s.next.start)} {s.next.task.title}まで {inMinutes(s.next.start - clock)}{:else}今日の動きは終わりました{/if}
       </span>
     </span>
-    <span class="lb-go">当日モード ›</span>
+    <span class="lb-go">当日モード<Icon name="right" size={14} /></span>
   </button>
 {/each}

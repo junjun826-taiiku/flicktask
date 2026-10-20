@@ -10,6 +10,7 @@
   import { addDays, countdown, rangeLabel, shortLabel, today, weekday } from './lib/dates';
   import { groupPrep, moves, progress, schedules } from './lib/eventView';
   import TaskCard from './TaskCard.svelte';
+  import Icon from './Icon.svelte';
 
   let { id, tab }: { id: string; tab: EventTab } = $props();
 
@@ -76,6 +77,13 @@
       </div>
     </div>
 
+    {#if e.closed}
+      <div class="ev-closed glass" data-testid="event-closed">
+        <span>このイベントは終了済みです</span>
+        <button onclick={() => store.updateEvent(e.id, { closed: false })} data-testid="event-reopen">再開する</button>
+      </div>
+    {/if}
+
     <div class="ev-tabs" role="tablist" style="--i:{tab === 'prep' ? 0 : tab === 'day' ? 1 : 2}">
       <span class="ev-tab-thumb" aria-hidden="true"></span>
       <button role="tab" aria-selected={tab === 'prep'} class:active={tab === 'prep'} onclick={() => setTab('prep')} data-testid="tab-prep">準備</button>
@@ -104,7 +112,7 @@
           {/each}
           {@const done = groups.find((g) => g.key === 'done')}
           {#if done}
-            <button class="done-toggle" onclick={() => (showDone = !showDone)} aria-expanded={showDone} data-testid="prep-done-toggle">完了 {done.items.length}件 {showDone ? '▴' : '▾'}</button>
+            <button class="done-toggle" onclick={() => (showDone = !showDone)} aria-expanded={showDone} data-testid="prep-done-toggle">完了 {done.items.length}件 <Icon name={showDone ? 'up' : 'down'} size={14} /></button>
             {#if showDone}
               <ul class="list">
                 {#each done.items as t (t.id)}

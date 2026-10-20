@@ -6,6 +6,7 @@
   import { eventSheet } from './lib/eventSheet.svelte';
   import { countdown, dueState, rangeLabel, shortLabel, today } from './lib/dates';
   import { nextUp, progress, targetDate } from './lib/eventView';
+  import Icon from './Icon.svelte';
 
   const t0 = $derived(today());
   // running first (soonest on top); finished ones fold away at the bottom
@@ -35,7 +36,7 @@
           <span class="ev-name"><i style="background:{COLOR_HEX[e.color]}"></i>{e.name}</span>
           <span class="ev-sub">{rangeLabel(e.start_date, e.end_date)}{e.place ? `・${e.place}` : ''}</span>
         </span>
-        <span class="ev-count" class:live={c.phase !== 'before'}>
+        <span class="ev-count" class:running={c.phase !== 'before'}>
           {#if c.phase === 'before'}
             <small>本番まで</small><strong data-testid="event-days">{c.days}日</strong>
           {:else}
@@ -65,7 +66,7 @@
 
   {#if finished.length}
     <button class="ev-finished glass" onclick={() => (showFinished = !showFinished)} aria-expanded={showFinished} data-testid="events-finished">
-      <span>終了したイベント</span><span>{finished.length}件 {showFinished ? '▴' : '▾'}</span>
+      <span>終了したイベント</span><span class="fin-count">{finished.length}件 <Icon name={showFinished ? 'up' : 'down'} size={14} /></span>
     </button>
     {#if showFinished}
       <div transition:slide={{ duration: 300, easing: cubicOut }}>

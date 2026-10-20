@@ -50,8 +50,13 @@ test('create an event from home; it opens and shows the days left', async ({ pag
   await page.getByTestId('event-end').fill(plus(21));
   await page.getByTestId('event-place').fill('武道場');
   await page.getByTestId('event-color-green').click();
-  await sheet.getByTestId('role-preset').filter({ hasText: '受付' }).click();
-  await sheet.getByTestId('role-preset').filter({ hasText: '設営' }).click();
+  // no ready-made roles: the club types its own; Enter adds the next row
+  await expect(sheet.getByTestId('role-name')).toHaveCount(0);
+  await sheet.getByTestId('role-add').click();
+  await expect(sheet.getByTestId('role-name').last()).toBeFocused();
+  await sheet.getByTestId('role-name').last().fill('受付');
+  await sheet.getByTestId('role-name').last().press('Enter');
+  await sheet.getByTestId('role-name').last().fill('設営');
   await expect(sheet.getByTestId('role-name')).toHaveCount(2);
   await page.getByTestId('event-save').click();
 
@@ -67,7 +72,10 @@ test('home switcher narrows the lists and new memos go into the chosen event', a
   await page.goto('/');
   await ready(page);
   await expect(card(page, '関係ないタスク')).toBeVisible();
-  await expect(card(page, '審判派遣依頼').getByTestId('chip-event')).toContainText('秋季リーグ戦');
+  // すべて: each event is a closed section; その他 is open
+  const group = page.getByTestId('task-group').filter({ hasText: '秋季リーグ戦' });
+  await expect(group.getByTestId('task-group-count')).toHaveText('1');
+  await expect(card(page, '審判派遣依頼')).toHaveCount(0);
 
   const chip = page.getByTestId('event-chip').filter({ hasText: '秋季リーグ戦' });
   await expect(chip).toContainText('あと11日');
@@ -80,7 +88,10 @@ test('home switcher narrows the lists and new memos go into the chosen event', a
   await memo(page).press('Enter');
   await expect(card(page, '弁当を発注')).toBeVisible();
   await page.getByTestId('event-chip-all').click();
-  await expect(card(page, '弁当を発注').getByTestId('chip-event')).toContainText('秋季リーグ戦');
+  await expect(group.getByTestId('task-group-count')).toHaveText('2');
+  await group.getByTestId('task-group-head').click();
+  await expect(group.getByTestId('task-card').filter({ hasText: '弁当を発注' })).toBeVisible();
+  await expect(group.getByTestId('chip-event')).toHaveCount(0); // the section already says which event
 
   // tapping the selected chip again opens the event
   await chip.click();
@@ -187,7 +198,8 @@ test('events and their tasks sync to another device @local', async ({ page, brow
   await ready(page);
   await page.getByTestId('event-chip-add').click();
   await page.getByTestId('event-name').fill('同期する大会');
-  await page.getByTestId('role-preset').filter({ hasText: '本部' }).click();
+  await page.getByTestId('role-add').click();
+  await page.getByTestId('role-name').fill('本部');
   await page.getByTestId('event-save').click();
   await page.getByTestId('event-add-task').click();
   await page.getByTestId('sheet-title').fill('大会の準備');
@@ -220,4 +232,38 @@ test('the API validates events @local', async ({ page }) => {
   expect((await send({ name: ' ' })).status()).toBe(400);
   expect((await send({ color: 'chartreuse' })).status()).toBe(400);
   expect((await send({ roles: [{ name: '受付', color: 'blue' }] })).status()).toBe(200);
+});
+
+test('home groups: open state is remembered; adding a task opens its section', async ({ page }) => {
+  await seed(page, [{ title: '会場予約' }, { title: '個人のメモ', event_id: null }]);
+  await page.goto('/');
+  await ready(page);
+  const group = page.getByTestId('task-group').filter({ hasText: '秋季リーグ戦' });
+  await expect(group.getByTestId('task-group-head')).toHaveAttribute('aria-expanded', 'false');
+  await expect(group).toContainText('あと11日');
+  await group.getByTestId('task-group-head').click();
+  await expect(card(page, '会場予約')).toBeVisible();
+  await page.reload();
+  await ready(page);
+  await expect(card(page, '会場予約')).toBeVisible();
+  await group.getByTestId('task-group-head').click();
+  await expect(card(page, '会場予約')).toHaveCount(0);
+
+  // a new task for the event (via the switcher) opens its section when you come back to すべて
+  await page.getByTestId('event-chip').filter({ hasText: '秋季リーグ戦' }).click();
+  await memo(page).fill('ゼッケン準備');
+  await memo(page).press('Enter');
+  await page.getByTestId('event-chip-all').click();
+  await expect(card(page, 'ゼッケン準備')).toBeVisible();
+});
+
+test('a closed event can be reopened', async ({ page }) => {
+  await seed(page, [], { closed: true });
+  await page.goto('/events/ev1');
+  await ready(page);
+  await expect(page.getByTestId('event-closed')).toBeVisible();
+  await page.getByTestId('event-reopen').click();
+  await expect(page.getByTestId('event-closed')).toHaveCount(0);
+  await page.goto('/');
+  await expect(page.getByTestId('event-chip').filter({ hasText: '秋季リーグ戦' })).toBeVisible();
 });

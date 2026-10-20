@@ -27,7 +27,7 @@
       in:scale={{ start: 0.7, duration: 380, easing: backOut }}
       data-testid="event-chip"
     >
-      <i style="background:{COLOR_HEX[e.color]}"></i>{e.name}<small class:live={c.phase !== 'before'}>{c.label}</small>
+      <i style="background:{COLOR_HEX[e.color]}"></i>{e.name}<small class:running={c.phase !== 'before'}>{c.label}</small>
     </button>
   {/each}
   <button class="ev-chip add" onclick={() => eventSheet.create()} aria-label="イベントを作成" data-testid="event-chip-add">

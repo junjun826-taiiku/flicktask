@@ -8,7 +8,7 @@
 .ev-chip:active { transform: scale(0.94); }
 .ev-chip i { width: 8px; height: 8px; border-radius: 50%; }
 .ev-chip small { font-size: 11px; font-weight: 700; color: var(--ink-2); }
-.ev-chip small.live { color: #c2410c; }
+.ev-chip small.running { color: #c2410c; }
 .ev-chip.on { color: #fff; background: var(--ink); }
 .ev-chip.on small { padding: 1px 6px; border-radius: 999px; color: #fff; background: rgba(255, 255, 255, 0.2); }
 .ev-chip.add { padding: 0 10px; color: var(--ink-2); }
@@ -38,7 +38,7 @@
 .ev-count { display: flex; flex-direction: column; align-items: flex-end; }
 .ev-count small { font-size: 11px; font-weight: 700; color: var(--ink-2); }
 .ev-count strong { font-size: 28px; line-height: 32px; font-weight: 800; color: var(--blue); }
-.ev-count.live strong { font-size: 16px; color: #c2410c; }
+.ev-count.running strong { font-size: 16px; color: #c2410c; }
 .ev-progress { display: flex; flex-direction: column; gap: 6px; }
 .ev-progress-label { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: var(--ink-2); }
 .bar { height: 8px; border-radius: 99px; background: rgba(20, 22, 28, 0.07); overflow: hidden; }
@@ -135,3 +135,23 @@
 /* ---------- calendar: the イベント itself ---------- */
 .m-item.meet { color: #fff; background: var(--c); font-weight: 800; }
 .ad-meet { height: 26px; padding: 0 10px; border-radius: 8px; font-size: 12.5px; font-weight: 800; color: #fff; background: var(--c); }
+
+/* icon buttons: centre the svg instead of a text glyph */
+.role-btn, .clear, .ai-due-x { display: inline-grid; place-items: center; }
+.done-toggle, .fin-count, .lb-go { display: inline-flex; align-items: center; gap: 4px; }
+.ev-closed { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-radius: 16px; font-size: 14px; font-weight: 700; color: var(--ink-2); }
+.ev-closed button { height: 36px; padding: 0 16px; border-radius: 999px; font-size: 14px; font-weight: 800; color: #fff; background: var(--ink); }
+
+/* home: one collapsible section per イベント */
+.tgroups { display: flex; flex-direction: column; gap: 10px; }
+.tgroup { border-radius: 20px; overflow: hidden; }
+.tg-head { width: 100%; display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 14px; text-align: left; transition: background 0.2s; }
+.tg-head:active { background: rgba(20, 22, 28, 0.04); }
+.tg-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; }
+.tg-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 800; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tg-when { flex: none; font-size: 12px; font-weight: 700; color: var(--ink-2); }
+.tg-when.hot { color: #e8590c; }
+.tg-count { flex: none; min-width: 24px; height: 22px; padding: 0 7px; border-radius: 999px; display: inline-grid; place-items: center; font-size: 12px; font-weight: 800; line-height: 1; background: rgba(20, 22, 28, 0.07); }
+.tg-chev { flex: none; display: grid; place-items: center; color: var(--ink-2); transition: transform 0.35s var(--spring); }
+.tgroup.open .tg-chev { transform: rotate(180deg); }
+.tg-body { padding: 0 10px 2px; }

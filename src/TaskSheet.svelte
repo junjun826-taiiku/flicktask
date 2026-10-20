@@ -7,6 +7,7 @@
   import { toasts } from './lib/toast.svelte';
   import { fromMin, toMin, today } from './lib/dates';
   import { vibrate } from './lib/motion';
+  import Icon from './Icon.svelte';
 
   const blank = (): Details => ({ title: '', status: 'todo', kind: 'task', note: '', due_date: null, due_time: null, plan_date: null, plan_start: null, plan_end: null, plan_end_date: null, event_id: store.currentEvent?.id ?? null, roles: [], place: '', items: '' });
   const isEvent = $derived(draft.kind === 'event');
@@ -256,7 +257,7 @@
             <input type="date" bind:value={draft.due_date} required aria-label="期限の日付" data-testid="sheet-due-date" />
             <input type="time" bind:value={draft.due_time} aria-label="期限の時刻" data-testid="sheet-due-time" />
             {#if draft.due_time}
-              <button class="clear" onclick={() => (draft.due_time = null)} aria-label="時刻を外す">×</button>
+              <button class="clear" onclick={() => (draft.due_time = null)} aria-label="時刻を外す"><Icon name="x" size={14} /></button>
             {/if}
           </div>
         {/if}
@@ -281,7 +282,7 @@
                 <span>〜 終了日</span>
                 <input type="date" bind:value={draft.plan_end_date} min={draft.plan_date} aria-label="終了日" data-testid="sheet-plan-end-date" />
                 {#if draft.plan_end_date}
-                  <button class="clear" onclick={() => (draft.plan_end_date = null)} aria-label="終了日を外す">×</button>
+                  <button class="clear" onclick={() => (draft.plan_end_date = null)} aria-label="終了日を外す"><Icon name="x" size={14} /></button>
                 {/if}
               </label>
             {/if}

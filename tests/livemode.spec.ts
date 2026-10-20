@@ -140,6 +140,7 @@ test('押し shifts what has not started yet, shows on the board, and can be und
   await page.goto('/events/ev1/live');
   await ready(page);
   await pick(page, '受付');
+  await page.clock.pauseAt(new Date(at(9, 12).getTime() + 40_000)); // keep the undo toast up while the test looks around
   await page.getByTestId('live-delay').click();
   await page.getByTestId('delay-10').click();
   const preview = page.getByTestId('delay-preview');
@@ -195,6 +196,47 @@ test('before the event, 当日モード is a preview of day one', async ({ page 
   await pick(page, '受付');
   await expect(page.getByTestId('live-preview')).toContainText('プレビュー');
   await expect(page.getByTestId('live-next')).toContainText('08:30');
+
+  // the × leaves 当日モード
+  await page.getByTestId('live-exit').click();
+  await expect(page).toHaveURL(/\/events\/ev1(\?|$)/);
+  await expect(page.getByTestId('live')).toHaveCount(0);
+
+  // finishing a preview only leaves: the event is not closed and no note is written
+  await page.getByTestId('live-start').click();
+  await page.getByTestId('live-end').click();
+  await page.getByTestId('sum-note').fill('プレビューのメモ');
+  await expect(page.getByTestId('sum-finish')).toHaveText('プレビューを閉じる');
+  await page.getByTestId('sum-finish').click();
+  await expect(page.getByTestId('event-closed')).toHaveCount(0);
+  await page.getByTestId('event-edit').click();
+  await expect(page.getByTestId('event-note')).toHaveValue('');
+});
+
+test('overlapping items on the 本部 board sit side by side, never on top of each other', async ({ page }) => {
+  await page.clock.install({ time: at(9, 12) });
+  await seed(page);
+  await page.addInitScript(() => {
+    if (localStorage.getItem('seeded2')) return;
+    const tasks = JSON.parse(localStorage.getItem('ft.tasks.v1')!);
+    const t0 = tasks[0];
+    tasks.push({ ...t0, id: crypto.randomUUID(), title: '全員ミーティング', status: 'todo', roles: [], plan_start: '07:40', plan_end: '08:10' });
+    tasks.push({ ...t0, id: crypto.randomUUID(), title: '受付の準備', status: 'todo', roles: ['受付'], plan_start: '08:40', plan_end: '09:10' });
+    localStorage.setItem('ft.tasks.v1', JSON.stringify(tasks));
+    localStorage.setItem('seeded2', '1');
+  });
+  await page.goto('/events/ev1/live');
+  await ready(page);
+  await page.getByTestId('pick-hq').click();
+  const blocks = page.getByTestId('live-board').getByTestId('board-block');
+  await expect(blocks.filter({ hasText: '全員ミーティング' })).toBeVisible();
+  const boxes = await blocks.evaluateAll((els) => els.map((el) => { const r = el.getBoundingClientRect(); return { t: el.textContent, x1: r.left, x2: r.right, y1: r.top, y2: r.bottom }; }));
+  for (const a of boxes)
+    for (const b of boxes) {
+      if (a === b) continue;
+      const overlap = Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1) > 1 && Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1) > 1;
+      expect(overlap, `${a.t} overlaps ${b.t}`).toBe(false);
+    }
 });
 
 test('本部 board updates live when another phone finishes a move @local', async ({ browser }) => {
@@ -219,6 +261,6 @@ test('本部 board updates live when another phone finishes a move @local', asyn
   const b = await login(await browser.newContext());
   await b.goto(`/events/${ev.id}/live`);
   await pick(b, '受付');
-  await b.getByTestId('live-check').filter({ hasNot: b.locator('text=✓') }).first().click(); // first unchecked in 受付's flow
+  await b.getByRole('button', { name: '完了にする' }).first().click(); // first unchecked in 受付's flow
   await expect(a.getByTestId('live-board').getByTestId('board-block').filter({ hasText: '受付・選手誘導' })).toHaveAttribute('data-state', 'done', { timeout: 6000 });
 });

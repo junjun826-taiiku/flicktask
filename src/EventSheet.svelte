@@ -9,17 +9,9 @@
   import { toasts } from './lib/toast.svelte';
   import { addDays, today } from './lib/dates';
   import { vibrate } from './lib/motion';
+  import Icon from './Icon.svelte';
 
   const COLOR_NAME: Record<Color, string> = { blue: '青', orange: 'オレンジ', violet: '紫', pink: 'ピンク', green: '緑', teal: '青緑', gray: 'グレー' };
-  const PRESETS: Role[] = [
-    { name: '本部', color: 'gray' },
-    { name: '受付', color: 'blue' },
-    { name: '設営', color: 'orange' },
-    { name: '審判補助', color: 'violet' },
-    { name: '救護', color: 'pink' },
-    { name: '会計', color: 'green' },
-    { name: '広報', color: 'teal' },
-  ];
 
   type Draft = EventDetails & { roles: (Role & { key: number })[] };
   let draft = $state<Draft>(blank());
@@ -45,10 +37,11 @@
     });
   });
 
-  const presetsLeft = $derived(PRESETS.filter((p) => !draft.roles.some((r) => r.name === p.name)));
-
-  function addRole(r: Role = { name: '', color: COLORS[draft.roles.length % COLORS.length] }) {
-    draft.roles.push({ ...r, key: ++keySeq });
+  let roleList = $state<HTMLUListElement>();
+  async function addRole() {
+    draft.roles.push({ name: '', color: COLORS[draft.roles.length % COLORS.length], key: ++keySeq });
+    await tick();
+    roleList?.querySelector<HTMLInputElement>('li:last-child input')?.focus();
   }
   function moveRole(i: number, d: -1 | 1) {
     const j = i + d;
@@ -156,22 +149,19 @@
 
       <div class="ev-field">
         <span>役割（当日の担当）</span>
-        <ul class="roles">
+        <ul class="roles" bind:this={roleList}>
           {#each draft.roles as r, i (r.key)}
             <li animate:flip={{ duration: 300 }} transition:slide={{ duration: 220 }}>
               <button class="role-color" style="--c:{COLOR_HEX[r.color]}" onclick={() => cycleColor(r)} aria-label="色を変える（{COLOR_NAME[r.color]}）"></button>
-              <input bind:value={r.name} placeholder="役割名" aria-label="役割名" data-testid="role-name" />
-              <button class="role-btn" onclick={() => moveRole(i, -1)} disabled={i === 0} aria-label="上へ">↑</button>
-              <button class="role-btn" onclick={() => moveRole(i, 1)} disabled={i === draft.roles.length - 1} aria-label="下へ">↓</button>
-              <button class="role-btn" onclick={() => draft.roles.splice(i, 1)} aria-label="削除">×</button>
+              <input bind:value={r.name} placeholder="役割名（例: 受付）" aria-label="役割名" onkeydown={(ev) => ev.key === 'Enter' && !ev.isComposing && (ev.preventDefault(), addRole())} data-testid="role-name" />
+              <button class="role-btn" onclick={() => moveRole(i, -1)} disabled={i === 0} aria-label="上へ"><Icon name="arrow-up" size={16} /></button>
+              <button class="role-btn" onclick={() => moveRole(i, 1)} disabled={i === draft.roles.length - 1} aria-label="下へ"><Icon name="arrow-down" size={16} /></button>
+              <button class="role-btn" onclick={() => draft.roles.splice(i, 1)} aria-label="削除"><Icon name="x" size={16} /></button>
             </li>
           {/each}
         </ul>
         <div class="role-presets">
-          {#each presetsLeft as p (p.name)}
-            <button class="preset" style="--c:{COLOR_HEX[p.color]}" onclick={() => addRole(p)} data-testid="role-preset">＋{p.name}</button>
-          {/each}
-          <button class="preset other" onclick={() => addRole()} data-testid="role-add">＋その他</button>
+          <button class="preset other" onclick={addRole} data-testid="role-add">＋ 役割を追加</button>
         </div>
       </div>
 

@@ -9,6 +9,7 @@
   import { toasts } from './lib/toast.svelte';
   import { addDays, fromMin, nowMin, rangeLabel, today, toMin } from './lib/dates';
   import { vibrate } from './lib/motion';
+  import Icon from './Icon.svelte';
   import { addDelay, columnize, dayRows, eventDays, getDelay, getRoles, inMinutes, itemsList, liveDay, mine, setRoles, situation, type LiveRoles, type Row } from './lib/liveMode';
 
   let { id }: { id: string } = $props();
@@ -112,7 +113,7 @@
     const cols = r.task.roles.map((x) => lanes.findIndex((l) => l.name === x)).filter((i) => i >= 0);
     return cols.length ? cols : null;
   };
-  /** everyone-items share the full width among themselves when they overlap */
+  /** everyone-items (全員 moves and 予定) get their own first column, so they never cover a 担当's blocks */
   const bands = $derived(columnize(rows.filter((r) => laneOf(r) === null)));
   /** per-role items share their role's column when they overlap */
   const laneBlocks = $derived(
@@ -161,6 +162,11 @@
   }
   function finishDay() {
     if (!e) return;
+    if (!isLiveDay) {
+      // a preview (rehearsal before the day) only leaves; nothing is closed or written
+      router.back();
+      return;
+    }
     const isLast = day >= e.end_date;
     const note = handover.trim();
     const dayNo = days.indexOf(day) + 1;
@@ -179,21 +185,21 @@
 
 {#if !e}
   <div class="live" data-testid="live">
-    <header class="live-head"><button class="lv-icon" onclick={() => router.back()} aria-label="閉じる">×</button></header>
+    <header class="live-head"><button class="lv-icon" onclick={() => router.back()} aria-label="閉じる"><Icon name="x" size={20} /></button></header>
     <p class="lv-empty">このイベントは見つかりません</p>
   </div>
 {:else if picking}
   <!-- 担当 pick: remembered on this device -->
   <div class="live pick" data-testid="live-pick" in:fade={{ duration: 200 }}>
     <header class="live-head">
-      <button class="lv-icon dark" onclick={() => (who ? (picking = false) : router.back())} aria-label="閉じる" data-testid="live-close">×</button>
+      <button class="lv-icon dark" onclick={() => (who ? (picking = false) : router.back())} aria-label="閉じる" data-testid="live-close"><Icon name="x" size={20} /></button>
       <span class="lv-sub">{e.name}{days.length > 1 ? `・${days.indexOf(day) + 1}日目` : ''}</span>
     </header>
     <h1 class="pick-title">この端末の担当は？</h1>
     <p class="pick-note">複数選べます。選んだ担当はこの端末に記憶されます。</p>
     <div class="pick-grid">
       <button class="pick-hq" onclick={() => startAs(true)} data-testid="pick-hq">
-        <i></i><span><strong>本部</strong><small>全員の動きを一覧で見る</small></span><b>›</b>
+        <i></i><span><strong>本部</strong><small>全員の動きを一覧で見る</small></span><b><Icon name="right" /></b>
       </button>
       {#each e.roles.filter((r) => r.name !== '本部') as r, i (r.name)}
         {@const on = pickDraft.includes(r.name)}
@@ -206,7 +212,7 @@
           in:scale={{ start: 0.85, duration: 380, delay: i * 40, easing: backOut }}
           data-testid="pick-role"
         >
-          <span class="pr-top"><i></i>{#if on}<b in:scale={{ duration: 260, easing: backOut }}>✓</b>{/if}</span>
+          <span class="pr-top"><i></i>{#if on}<b in:scale={{ duration: 260, easing: backOut }}><Icon name="check" size={14} /></b>{/if}</span>
           <strong>{r.name}</strong>
         </button>
       {/each}
@@ -219,8 +225,9 @@
   <div class="live" data-testid="live" data-view={view}>
     {#if view === 'now'}
       <header class="live-head">
+        <button class="lv-icon" onclick={() => router.back()} aria-label="当日モードを閉じる" data-testid="live-exit"><Icon name="x" size={20} /></button>
         <button class="lv-role" style="--c:{who?.roles[0] ? roleColor(who.roles[0]) : '#14161c'}" onclick={() => ((pickDraft = who?.roles ?? []), (picking = true))} data-testid="live-role">
-          {whoLabel} ▾
+          <span>{whoLabel}</span><Icon name="down" size={14} />
         </button>
         <span class="lv-sub">{e.name}{days.length > 1 ? `・${days.indexOf(day) + 1}日目` : ''}</span>
         <span class="lv-clock" data-testid="live-clock">{hhmm(clock)}</span>
@@ -232,7 +239,7 @@
       <div class="lv-scroll">
         {#each sit.over as r (r.task.id)}
           <button class="lv-over" onclick={() => complete(r.task)} transition:slide={{ duration: 260 }} data-testid="live-over">
-            <span>{fromMin(r.start)}</span><strong>{r.task.title}</strong><em>終わったら✓</em>
+            <span>{fromMin(r.start)}</span><strong>{r.task.title}</strong><em>終わったら<Icon name="check" size={14} /></em>
           </button>
         {/each}
 
@@ -270,7 +277,7 @@
           </div>
         {/if}
         {#each sit.alsoNow as r (r.task.id)}
-          <button class="lv-also" onclick={() => complete(r.task)} data-testid="live-also"><span>同時進行</span><strong>{r.task.title}</strong><em>✓</em></button>
+          <button class="lv-also" onclick={() => complete(r.task)} data-testid="live-also"><span>同時進行</span><strong>{r.task.title}</strong><em><Icon name="check" size={16} /></em></button>
         {/each}
 
         {#if sit.next}
@@ -294,7 +301,7 @@
                 <span class="lv-check event" aria-hidden="true"></span>
               {:else}
                 <button class="lv-check" class:done={r.task.status === 'done'} onclick={() => toggleDone(r.task)} aria-label={r.task.status === 'done' ? '未完了に戻す' : '完了にする'} data-testid="live-check">
-                  {#if r.task.status === 'done'}✓{/if}
+                  {#if r.task.status === 'done'}<Icon name="check" size={14} />{/if}
                 </button>
               {/if}
               <button class="lv-row-title" onclick={() => sheet.edit(r.task.id)}>{r.task.title}</button>
@@ -311,7 +318,7 @@
       </nav>
     {:else if view === 'all'}
       <header class="live-head">
-        <button class="lv-icon" onclick={() => (who?.hq ? router.back() : (view = 'now'))} aria-label="戻る" data-testid="live-all-back">‹</button>
+        <button class="lv-icon" onclick={() => (who?.hq ? router.back() : (view = 'now'))} aria-label="戻る" data-testid="live-all-back"><Icon name="back" size={20} /></button>
         <span class="lv-title">全体</span>
         <span class="lv-sub">{who?.hq ? '本部' : ''}</span>
         <span class="lv-clock">{hhmm(clock)}</span>
@@ -319,12 +326,13 @@
       {#if delay > 0}
         <button class="lv-delay-banner" onclick={() => (delayOpen = true)} data-testid="live-delay-banner">＋{delay}分 押し中<span>変更</span></button>
       {/if}
-      <div class="lv-lanes-head" style="--n:{Math.max(1, lanes.length)}">
+      <div class="lv-lanes-head" style="--n:{lanes.length + 1}">
         <span></span>
+        <span style="--c:#868e96">全員</span>
         {#each lanes as l}<span style="--c:{COLOR_HEX[l.color]}">{l.name}</span>{/each}
       </div>
       <div class="lv-board-scroll">
-        <div class="lv-board" style="height:{(span.to - span.from) * PX}px; --n:{Math.max(1, lanes.length)}" data-testid="live-board">
+        <div class="lv-board" style="height:{(span.to - span.from) * PX}px; --n:{lanes.length + 1}" data-testid="live-board">
           {#each Array.from({ length: (span.to - span.from) / 60 + 1 }, (_, i) => span.from + i * 60) as h}
             <div class="lv-hour" style="top:{(h - span.from) * PX}px"><span>{h / 60}:00</span></div>
           {/each}
@@ -333,17 +341,17 @@
             <button
               class="lv-block band"
               data-state={st}
-              style="top:{(r.start - span.from) * PX}px; height:{Math.max(18, (r.end - r.start) * PX - 2)}px; --col:{r.col}; --cols:{r.cols}"
+              style="top:{(r.start - span.from) * PX}px; height:{Math.max(18, (r.end - r.start) * PX - 2)}px; --i:0; --col:{r.col}; --cols:{r.cols}"
               onclick={() => sheet.edit(r.task.id)}
               data-testid="board-block"
-            ><span>{st === 'done' ? '✓ ' : ''}{r.task.title}{r.isEvent ? '' : '・全員'}</span></button>
+            ><span>{st === 'done' ? '✓ ' : ''}{r.task.title}</span></button>
           {/each}
           {#each laneBlocks as r (r.task.id + ':' + r.lane)}
             {@const st = rowState(r)}
             <button
               class="lv-block"
               data-state={st}
-              style="top:{(r.start - span.from) * PX}px; height:{Math.max(18, (r.end - r.start) * PX - 2)}px; --i:{r.lane}; --col:{r.col}; --cols:{r.cols}; --c:{COLOR_HEX[lanes[r.lane].color]}"
+              style="top:{(r.start - span.from) * PX}px; height:{Math.max(18, (r.end - r.start) * PX - 2)}px; --i:{r.lane + 1}; --col:{r.col}; --cols:{r.cols}; --c:{COLOR_HEX[lanes[r.lane].color]}"
               onclick={() => sheet.edit(r.task.id)}
               data-testid="board-block"
             ><span>{st === 'done' ? '✓ ' : ''}{r.task.title}</span></button>
@@ -366,7 +374,7 @@
     {:else}
       <!-- 終了・振り返り -->
       <header class="live-head">
-        <button class="lv-icon" onclick={() => (view = who?.hq ? 'all' : 'now')} aria-label="戻る" data-testid="summary-back">‹</button>
+        <button class="lv-icon" onclick={() => (view = who?.hq ? 'all' : 'now')} aria-label="戻る" data-testid="summary-back"><Icon name="back" size={20} /></button>
         <span class="lv-sub">{e.name}{days.length > 1 ? `・${days.indexOf(day) + 1}日目` : ''}</span>
       </header>
       <div class="lv-scroll">
@@ -392,7 +400,7 @@
         </label>
       </div>
       <nav class="lv-bar single">
-        <button class="primary" onclick={finishDay} data-testid="sum-finish">{day >= e.end_date ? 'イベントを終了する' : `${days.indexOf(day) + 1}日目を終了する`}</button>
+        <button class="primary" onclick={finishDay} data-testid="sum-finish">{!isLiveDay ? 'プレビューを閉じる' : day >= e.end_date ? 'イベントを終了する' : `${days.indexOf(day) + 1}日目を終了する`}</button>
       </nav>
     {/if}
 
