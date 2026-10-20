@@ -20,9 +20,9 @@
   const fitAll = $derived(Math.max(1, Math.floor((rowH - 31) / 18)));
   const fitWithMore = $derived(Math.max(1, Math.floor((rowH - 45) / 18)));
 
-  /** where a multi-day bar's name is written: its first day and each week row it wraps onto, across the whole run */
+  /** multi-day bars, drawn as one piece per week row above the cells (no seams between days), with the name along it */
   const barLabels = $derived.by(() => {
-    const out: { key: string; title: string; kind: string; color?: string; row: number; col: number; run: number; slot: number }[] = [];
+    const out: { key: string; title: string; kind: string; status: string; color?: string; row: number; col: number; run: number; slot: number; head: boolean; tail: boolean }[] = [];
     days.forEach((d, i) => {
       const items = monthItems(store.tasks, d, store.liveEvents);
       const shown = items.length > fitAll ? fitWithMore : fitAll;
@@ -30,7 +30,8 @@
         if (it.span === 'single' || !(it.span === 'start' || i % 7 === 0)) return;
         let run = 1;
         while ((i + run) % 7 !== 0 && i + run < days.length && days[i + run] <= it.end) run++;
-        out.push({ key: `${it.task.id}:${d}`, title: it.task.title, kind: it.kind, color: it.color, row: Math.floor(i / 7), col: i % 7, run, slot });
+        const last = days[i + run - 1];
+        out.push({ key: `${it.task.id}:${d}`, title: it.task.title, kind: it.kind, status: it.task.status, color: it.color, row: Math.floor(i / 7), col: i % 7, run, slot, head: it.span === 'start', tail: last === it.end });
       });
     });
     return out;
@@ -95,7 +96,10 @@
       {#each barLabels as l (l.key)}
         <span
           class="m-bar-label {l.kind}"
-          style="--row:{l.row}; --col:{l.col}; --run:{l.run}; --slot:{l.slot}"
+          class:head={l.head}
+          class:tail={l.tail}
+          data-status={l.status}
+          style="--row:{l.row}; --col:{l.col}; --run:{l.run}; --slot:{l.slot}{l.color ? `; --c:${l.color}` : ''}"
           aria-hidden="true"
           data-testid="m-bar-label">{l.title}</span
         >

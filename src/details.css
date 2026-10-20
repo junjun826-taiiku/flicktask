@@ -314,14 +314,26 @@
 .block:not(.short) > strong { flex-shrink: 0; }
 .block:not(.short) > span:not(.resize):not(.drag-time) { flex-shrink: 1; min-height: 0; overflow: hidden; }
 
-/* the name of a multi-day bar runs along the whole bar (to the end of the week row), above the cells */
-.m-bar-label { position: absolute; z-index: 2; pointer-events: none;
-  left: calc((100% - 18px) / 7 * var(--col) + 3px * var(--col) + 7px);
-  width: calc((100% - 18px) / 7 * var(--run) + 3px * (var(--run) - 1) - 14px);
+/* a multi-day bar: one piece per week row, above the cells (own layer, so Safari never paints a cell over it);
+   the in-cell segment only keeps its slot */
+.m-item[data-span]:not([data-span='single']) { visibility: hidden; }
+.m-bar-label { position: absolute; z-index: 5; pointer-events: none; will-change: transform; transform: translateZ(0);
+  left: calc((100% - 18px) / 7 * var(--col) + 3px * var(--col) + 3px);
+  width: calc((100% - 18px) / 7 * var(--run) + 3px * (var(--run) - 1) - 6px);
   top: calc((100% - 15px) / 6 * var(--row) + 3px * var(--row) + 29px + 18px * var(--slot));
-  height: 16px; font-size: 10px; font-weight: 700; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; }
-.m-bar-label.meet { font-weight: 800; }
-.m-bar-label.event { color: #06403f; }
+  height: 16px; box-sizing: border-box; padding: 0 4px; font-size: 10px; font-weight: 700; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: #fff; background: var(--plan-todo); }
+.m-bar-label.head { border-top-left-radius: 5px; border-bottom-left-radius: 5px; }
+.m-bar-label.tail { border-top-right-radius: 5px; border-bottom-right-radius: 5px; }
+/* continuing from / into another week: run to the edge of the row */
+.m-bar-label:not(.head) { margin-left: -3px; padding-left: 7px; width: calc((100% - 18px) / 7 * var(--run) + 3px * (var(--run) - 1) - 3px); }
+.m-bar-label:not(.tail) { width: calc((100% - 18px) / 7 * var(--run) + 3px * (var(--run) - 1) - 3px); }
+.m-bar-label:not(.head):not(.tail) { width: calc((100% - 18px) / 7 * var(--run) + 3px * (var(--run) - 1)); }
+.m-bar-label.meet { font-weight: 800; background: var(--c); }
+.m-bar-label.event { color: #06403f; background: #c9f0ee; }
+.m-bar-label.event.head { box-shadow: inset 2px 0 0 var(--event); }
+.m-bar-label.plan[data-status='doing'] { background: var(--plan-doing); }
+.m-bar-label.plan[data-status='done'] { background: var(--plan-done); opacity: 0.6; }
 /* rows stay put horizontally (bars join across cells) but nothing spills into the row below */
 .cell { overflow: visible clip; }
 /* phones: a single-day name may take two lines instead of being cut */
@@ -329,6 +341,3 @@
   .m-item[data-span='single'] { height: auto; min-height: 16px; padding-top: 1px; padding-bottom: 1px; line-height: 12px; }
   .m-item[data-span='single'] span { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: 9.5px; }
 }
-/* a bar that continues into the next week stops at the edge of its row */
-.cell.sat .m-item[data-span='start'], .cell.sat .m-item[data-span='mid'] { margin-right: 0; }
-.cell.sun .m-item[data-span='mid'], .cell.sun .m-item[data-span='end'] { margin-left: 0; }
