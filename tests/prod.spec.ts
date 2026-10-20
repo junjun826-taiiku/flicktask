@@ -57,3 +57,11 @@ test('production: privacy policy and terms are public and linked from home', asy
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(heading);
   }
 });
+
+test('app icons are served for browsers and home screens', async ({ request, page }) => {
+  for (const p of ['/icon.svg', '/icon-180.png', '/icon-192.png', '/icon-512.png']) expect((await request.get(p)).status(), p).toBe(200);
+  const manifest = await (await request.get('/manifest.webmanifest')).json();
+  expect(manifest.icons.map((i: { src: string }) => i.src)).toContain('/icon-512.png');
+  await page.goto('/');
+  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href', '/icon-180.png');
+});
