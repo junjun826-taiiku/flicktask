@@ -267,3 +267,21 @@ test('a closed event can be reopened', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('event-chip').filter({ hasText: '秋季リーグ戦' })).toBeVisible();
 });
+
+test('inside an event section, 当日の動き are kept apart from 準備', async ({ page }) => {
+  await seed(page, [
+    { title: '会場予約' },
+    { title: '受付', plan_date: plus(11), plan_start: '09:00', plan_end: '10:00' },
+    { title: '開会式の準備', plan_date: plus(11), plan_start: '08:00', plan_end: '08:30' },
+  ]);
+  await page.goto('/');
+  await ready(page);
+  const group = page.getByTestId('task-group').filter({ hasText: '秋季リーグ戦' });
+  await group.getByTestId('task-group-head').click();
+  await expect(card(page, '会場予約')).toBeVisible();
+  await expect(card(page, '受付')).toHaveCount(0); // 当日 is folded
+  const day = group.getByTestId('task-group-day');
+  await expect(day).toContainText('2');
+  await day.getByTestId('task-group-day-head').click();
+  await expect(day.getByTestId('task-card')).toHaveText([/開会式の準備/, /受付/]); // by time
+});

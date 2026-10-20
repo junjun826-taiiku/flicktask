@@ -3,8 +3,10 @@ import { toMin } from './dates';
 
 export type PlanBlock = { task: Task; start: number; end: number; col: number; cols: number };
 
-/** Timed blocks for one day, laid out side by side where they overlap (Google Calendar style). */
-export function layoutBlocks(tasks: Task[], date: string): PlanBlock[] {
+/** Timed blocks for one day, laid out side by side where they overlap (Google Calendar style).
+ *  minSpan: minutes the shortest drawn block covers, so a short block's label never sits under the next one. */
+export function layoutBlocks(tasks: Task[], date: string, minSpan = 0): PlanBlock[] {
+  const vend = (b: PlanBlock) => Math.max(b.end, b.start + minSpan);
   const items = tasks
     .filter((t) => !t.deleted && t.plan_date === date && t.plan_start)
     .map((t) => {
@@ -23,12 +25,12 @@ export function layoutBlocks(tasks: Task[], date: string): PlanBlock[] {
   };
   for (const b of items) {
     if (b.start >= clusterEnd) flush(), (clusterEnd = -1);
-    const used = new Set(cluster.filter((o) => o.end > b.start).map((o) => o.col));
+    const used = new Set(cluster.filter((o) => vend(o) > b.start).map((o) => o.col));
     let c = 0;
     while (used.has(c)) c++;
     b.col = c;
     cluster.push(b);
-    clusterEnd = Math.max(clusterEnd, b.end);
+    clusterEnd = Math.max(clusterEnd, vend(b));
   }
   flush();
   return items;

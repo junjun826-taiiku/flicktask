@@ -77,7 +77,8 @@ export const itemsList = (s: string) =>
     .filter(Boolean);
 
 /** Side-by-side columns for overlapping time ranges (same idea as the calendar day view). */
-export function columnize<T extends { start: number; end: number }>(items: T[]): (T & { col: number; cols: number })[] {
+export function columnize<T extends { start: number; end: number }>(items: T[], minSpan = 0): (T & { col: number; cols: number })[] {
+  const vend = (b: T) => Math.max(b.end, b.start + minSpan);
   const sorted = [...items].sort((a, b) => a.start - b.start || b.end - a.end).map((it) => ({ ...it, col: 0, cols: 1 }));
   let cluster: typeof sorted = [];
   let clusterEnd = -1;
@@ -88,12 +89,12 @@ export function columnize<T extends { start: number; end: number }>(items: T[]):
   };
   for (const b of sorted) {
     if (b.start >= clusterEnd) (flush(), (clusterEnd = -1));
-    const used = new Set(cluster.filter((o) => o.end > b.start).map((o) => o.col));
+    const used = new Set(cluster.filter((o) => vend(o) > b.start).map((o) => o.col));
     let c = 0;
     while (used.has(c)) c++;
     b.col = c;
     cluster.push(b);
-    clusterEnd = Math.max(clusterEnd, b.end);
+    clusterEnd = Math.max(clusterEnd, vend(b));
   }
   flush();
   return sorted;

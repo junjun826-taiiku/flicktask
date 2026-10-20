@@ -11,6 +11,7 @@
   import { store, COLOR_HEX, type FEvent, type Task } from './lib/store.svelte';
   import { collapse } from './lib/motion';
   import { countdown } from './lib/dates';
+  import { isMove } from './lib/eventView';
   import TaskCard from './TaskCard.svelte';
   import Icon from './Icon.svelte';
 
@@ -33,7 +34,7 @@
     } catch {}
   }
 
-  type Group = { key: string; event: FEvent | null; items: Task[] };
+  type Group = { key: string; event: FEvent | null; items: Task[]; prep: Task[]; day: Task[] };
   const groups = $derived.by(() => {
     const byEvent = new Map<string, Task[]>();
     const other: Task[] = [];
@@ -42,8 +43,15 @@
       if (!e) other.push(t);
       else byEvent.set(e.id, [...(byEvent.get(e.id) ?? []), t]);
     }
-    const out: Group[] = store.liveEvents.filter((e) => byEvent.has(e.id)).map((e) => ({ key: e.id, event: e, items: byEvent.get(e.id)! }));
-    if (other.length) out.push({ key: OTHER, event: null, items: other });
+    const out: Group[] = store.liveEvents
+      .filter((e) => byEvent.has(e.id))
+      .map((e) => {
+        const items = byEvent.get(e.id)!;
+        // 当日の動き (timed, on the event's days) apart from 準備, in time order
+        const day = items.filter((t) => isMove(t, e)).sort((a, b) => `${a.plan_date} ${a.plan_start}`.localeCompare(`${b.plan_date} ${b.plan_start}`));
+        return { key: e.id, event: e, items, prep: items.filter((t) => !isMove(t, e)), day };
+      });
+    if (other.length) out.push({ key: OTHER, event: null, items: other, prep: other, day: [] });
     return out;
   });
   const openCount = (items: Task[]) => items.filter((t) => t.status !== 'done').length;
@@ -56,8 +64,10 @@
     newest = Math.max(...fresh.map((t) => t.created_at));
     untrack(() => {
       for (const t of fresh) {
-        const key = store.eventById(t.event_id) ? t.event_id! : OTHER;
+        const e = store.eventById(t.event_id);
+        const key = e ? e.id : OTHER;
         if (!open.includes(key)) setOpen(key, true);
+        if (e && isMove(t, e) && !open.includes(key + ':day')) setOpen(key + ':day', true);
       }
     });
   });
@@ -76,13 +86,33 @@
     </button>
     {#if isOpen}
       <div class="tg-body" transition:slide={{ duration: 320, easing: cubicOut }}>
+        {#if g.day.length && g.prep.length}<span class="tg-label">準備</span>{/if}
         <ul class="list">
-          {#each g.items as task, i (task.id)}
+          {#each g.prep as task, i (task.id)}
             <li animate:flip={{ duration: 420, easing: cubicOut }} in:fly={{ y: -18, duration: 460, easing: backOut }} out:collapse={{ duration: 360 }}>
               <TaskCard {task} hint={gi === 0 && i === 0} showEvent={false} />
             </li>
           {/each}
         </ul>
+        {#if g.day.length}
+          {@const dayOpen = open.includes(g.key + ':day')}
+          <div class="tg-day" class:open={dayOpen} data-testid="task-group-day">
+            <button class="tg-day-head" aria-expanded={dayOpen} onclick={() => setOpen(g.key + ':day', !dayOpen)} data-testid="task-group-day-head">
+              <span>当日の動き</span>
+              <span class="tg-count">{openCount(g.day)}</span>
+              <span class="tg-chev"><Icon name="down" size={14} /></span>
+            </button>
+            {#if dayOpen}
+              <ul class="list" transition:slide={{ duration: 300, easing: cubicOut }}>
+                {#each g.day as task (task.id)}
+                  <li animate:flip={{ duration: 420, easing: cubicOut }} out:collapse={{ duration: 360 }}>
+                    <TaskCard {task} showEvent={false} />
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          </div>
+        {/if}
       </div>
     {/if}
   </section>

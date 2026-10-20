@@ -140,7 +140,6 @@ test('押し shifts what has not started yet, shows on the board, and can be und
   await page.goto('/events/ev1/live');
   await ready(page);
   await pick(page, '受付');
-  await page.clock.pauseAt(new Date(at(9, 12).getTime() + 40_000)); // keep the undo toast up while the test looks around
   await page.getByTestId('live-delay').click();
   await page.getByTestId('delay-10').click();
   const preview = page.getByTestId('delay-preview');
@@ -148,6 +147,9 @@ test('押し shifts what has not started yet, shows on the board, and can be und
   await expect(preview).toContainText('→ 09:40');
   await expect(preview).not.toContainText('受付・選手誘導'); // already running: not moved
   await page.getByTestId('delay-apply').click();
+  await expect(page.getByTestId('delay-sheet')).toHaveCount(0);
+  // freeze timers so the undo toast stays up while the test looks around (after the sheet's exit animation)
+  await page.clock.pauseAt(new Date((await page.evaluate(() => Date.now())) + 500));
   await expect(page.getByTestId('live-next')).toContainText('09:40');
   await page.getByTestId('live-all').click();
   await expect(page.getByTestId('live-delay-banner')).toContainText('＋10分 押し中');
@@ -213,30 +215,58 @@ test('before the event, 当日モード is a preview of day one', async ({ page 
   await expect(page.getByTestId('event-note')).toHaveValue('');
 });
 
-test('overlapping items on the 本部 board sit side by side, never on top of each other', async ({ page }) => {
+test('本部 board: 全員 items span the whole board; nothing hides a title', async ({ page }) => {
   await page.clock.install({ time: at(9, 12) });
   await seed(page);
   await page.addInitScript(() => {
     if (localStorage.getItem('seeded2')) return;
     const tasks = JSON.parse(localStorage.getItem('ft.tasks.v1')!);
     const t0 = tasks[0];
-    tasks.push({ ...t0, id: crypto.randomUUID(), title: '全員ミーティング', status: 'todo', roles: [], plan_start: '07:40', plan_end: '08:10' });
-    tasks.push({ ...t0, id: crypto.randomUUID(), title: '受付の準備', status: 'todo', roles: ['受付'], plan_start: '08:40', plan_end: '09:10' });
+    const add = (o: object) => tasks.push({ ...t0, id: crypto.randomUUID(), status: 'todo', roles: [], ...o });
+    add({ title: '全員ミーティング', plan_start: '07:40', plan_end: '08:10' });
+    add({ title: '受付の準備', roles: ['受付'], plan_start: '08:40', plan_end: '09:10' });
+    add({ title: 'OBOG総会', plan_start: '10:00', plan_end: '12:00' });
+    add({ title: '提案', roles: ['設営'], plan_start: '10:00', plan_end: '12:00' });
+    add({ title: '飲み物補充', roles: ['本部'], plan_start: '10:00', plan_end: '12:00' });
+    add({ title: 'お迎え', roles: ['本部'], plan_start: '09:45', plan_end: '10:00' });
     localStorage.setItem('ft.tasks.v1', JSON.stringify(tasks));
     localStorage.setItem('seeded2', '1');
   });
   await page.goto('/events/ev1/live');
   await ready(page);
   await page.getByTestId('pick-hq').click();
-  const blocks = page.getByTestId('live-board').getByTestId('board-block');
-  await expect(blocks.filter({ hasText: '全員ミーティング' })).toBeVisible();
-  const boxes = await blocks.evaluateAll((els) => els.map((el) => { const r = el.getBoundingClientRect(); return { t: el.textContent, x1: r.left, x2: r.right, y1: r.top, y2: r.bottom }; }));
-  for (const a of boxes)
-    for (const b of boxes) {
-      if (a === b) continue;
-      const overlap = Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1) > 1 && Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1) > 1;
-      expect(overlap, `${a.t} overlaps ${b.t}`).toBe(false);
-    }
+  const board = page.getByTestId('live-board');
+  await expect(board.getByTestId('board-block').filter({ hasText: 'OBOG総会' })).toBeVisible();
+  // measure in board coordinates (the board scrolls itself to "now")
+  const rect = (sel: string) =>
+    board.evaluate((root, sel) => {
+      const o = root.getBoundingClientRect();
+      return [...root.querySelectorAll(sel)].map((el) => { const r = el.getBoundingClientRect(); return { t: el.textContent, x1: r.left - o.left, x2: r.right - o.left, y1: r.top - o.top, y2: r.bottom - o.top }; });
+    }, sel);
+  const hit = (a: { x1: number; x2: number; y1: number; y2: number }, b: typeof a) => Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1) > 1 && Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1) > 1;
+  const boardBox = (await board.boundingBox())!;
+  const bands = await rect('[data-band]');
+  const heads = await rect('[data-testid="band-head"]');
+  const roles = await rect('[data-testid="board-block"]:not([data-band])');
+  // a 全員 item that overlaps nothing else runs (almost) the full width of the board
+  const obog = bands.find((b) => b.t!.includes('OBOG総会'))!;
+  expect(obog.x2 - obog.x1).toBeGreaterThan((boardBox.width - 46) * 0.95);
+  // 担当 blocks never overlap each other or a 全員 title strip; 全員 items never overlap each other
+  for (const a of roles) for (const b of roles) if (a !== b) expect(hit(a, b), `${a.t} / ${b.t}`).toBe(false);
+  // every title is on top where it is drawn: 全員 labels, and the first line of each 担当 block
+  const covered = await board.evaluate((root) => {
+    const out: string[] = [];
+    const check = (el: Element, x: number, y: number) => {
+      const top = document.elementFromPoint(x, y);
+      if (!top || !(el === top || el.contains(top))) out.push(`${el.textContent} under ${top?.textContent}`);
+    };
+    for (const el of root.querySelectorAll('[data-testid="band-head"]')) { el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); check(el, r.left + 10, r.top + r.height / 2); }
+    for (const el of root.querySelectorAll('[data-testid="board-block"]:not([data-band])')) { el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); check(el, r.left + 8, r.top + 8); }
+    return out;
+  });
+  expect(covered).toEqual([]);
+  for (const a of bands) for (const b of bands) if (a !== b) expect(hit(a, b), `${a.t} / ${b.t}`).toBe(false);
+  expect(heads.length).toBe(bands.length);
 });
 
 test('本部 board updates live when another phone finishes a move @local', async ({ browser }) => {

@@ -14,7 +14,9 @@
   let { date }: { date: string } = $props();
 
   const H = 56; // px per hour
-  const blocks = $derived(layoutBlocks(store.tasks, date));
+  /** a block shorter than this shows title and time on one line */
+  const MIN_BLOCK = 24;
+  const blocks = $derived(layoutBlocks(store.tasks, date, Math.ceil((MIN_BLOCK / H) * 60)));
   const dues = $derived(timedDeadlines(store.tasks, date));
   const top = $derived(allDay(store.tasks, date));
   // イベント held on this day (大会・行事)
@@ -199,9 +201,10 @@
             <button
               class="block"
               class:dragging
+              class:short={((p.end - p.start) / 60) * H < 40}
               data-status={b.task.status}
               data-kind={b.task.kind}
-              style="top:{(p.start / 60) * H}px; height:{Math.max(((p.end - p.start) / 60) * H - 2, 22)}px; left:calc({(b.col / b.cols) * 100}% + 2px); width:calc({100 / b.cols}% - 4px)"
+              style="top:{(p.start / 60) * H}px; height:{Math.max(((p.end - p.start) / 60) * H - 2, MIN_BLOCK)}px; left:calc({(b.col / b.cols) * 100}% + 2px); width:calc({100 / b.cols}% - 4px)"
               onpointerdown={(e) => press(e, b, 'move')}
               onclick={(e) => (e.stopPropagation(), !justDragged && sheet.edit(b.task.id))}
               in:scale={{ start: 0.85, duration: 420, delay: i * 40, easing: backOut }}

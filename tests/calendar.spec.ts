@@ -392,3 +392,30 @@ test('touch: press and hold drags a block, a quick swipe just scrolls', async ({
   await expect(b).toContainText('10:00–11:00');
 });
 });
+
+test('short blocks next to longer ones never hide each other in the day view', async ({ page }) => {
+  const day = new Date();
+  day.setDate(day.getDate() + 2);
+  const d = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+  await page.addInitScript((d) => {
+    const base = { status: 'todo', kind: 'task', deleted: false, note: '', due_date: null, due_time: null, plan_end_date: null, created_at: 1, updated_at: 1, plan_date: d };
+    const t = (id: string, title: string, s: string, e: string) => ({ ...base, id, title, plan_start: s, plan_end: e });
+    localStorage.setItem('ft.hinted', '1');
+    localStorage.setItem('ft.tasks.v1', JSON.stringify([
+      t('a', 'リハーサル', '13:00', '13:45'), t('b', '案内', '13:00', '13:15'), t('c', '受付・荷物受付', '13:30', '13:45'),
+      t('d', '教職員お迎え', '13:50', '14:00'), t('e', '飲み物補充', '14:00', '16:00'), t('f', '荷物警備', '14:00', '16:00'),
+    ]));
+  }, d);
+  await page.goto(`/calendar/${d}`);
+  const blocks = page.getByTestId('block');
+  await expect(blocks).toHaveCount(6);
+  const boxes = await blocks.evaluateAll((els) => els.map((el) => { const r = el.getBoundingClientRect(); return { t: el.textContent, x1: r.left, x2: r.right, y1: r.top, y2: r.bottom }; }));
+  for (const a of boxes)
+    for (const b of boxes) {
+      if (a === b) continue;
+      const hit = Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1) > 1 && Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1) > 1;
+      expect(hit, `${a.t} / ${b.t}`).toBe(false);
+    }
+  // a 10-minute block still shows its title on one line
+  await expect(blocks.filter({ hasText: '教職員お迎え' })).toHaveClass(/short/);
+});

@@ -89,10 +89,21 @@
 /* lane = (board width) / n; within a lane, overlapping items split it into --cols columns */
 .lv-block { --col: 0; --cols: 1; position: absolute; left: calc(42px + (100% - 46px) * (var(--i) + var(--col) / var(--cols)) / var(--n)); width: calc((100% - 46px) / var(--n) / var(--cols) - 4px); padding: 3px 6px; overflow: hidden; border-radius: 8px; text-align: left;
   font-size: 11.5px; line-height: 15px; font-weight: 700; color: color-mix(in srgb, var(--c) 70%, #000); background: color-mix(in srgb, var(--c) 15%, #fff); }
-.lv-block.band { color: var(--ink-2); background: rgba(20, 22, 28, 0.06); }
+/* 全員 / 予定: across every 担当 column, behind them; the title strip on top stays clear */
+.lv-block.band { display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; left: calc(42px + (100% - 46px) * var(--col) / var(--cols)); width: calc((100% - 46px) / var(--cols) - 4px); z-index: 0; padding: 0; color: var(--ink-2); background: rgba(20, 22, 28, 0.05); box-shadow: inset 3px 0 0 #adb5bd; }
+.band-head { position: absolute; z-index: 3; left: calc(42px + (100% - 46px) * var(--col) / var(--cols)); max-width: calc((100% - 46px) / var(--cols) - 4px); height: 20px; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border-radius: 8px 8px 8px 0; font-size: 12px; font-weight: 800; color: var(--ink); background: #e6e8ee; box-shadow: 0 0 0 2px #fff; white-space: nowrap; overflow: hidden; }
+.band-head span { overflow: hidden; text-overflow: ellipsis; }
+.band-head small { flex: none; font-size: 10.5px; font-weight: 700; color: var(--ink-2); }
+.band-head[data-state='event'] { color: #06403f; background: #c9f0ee; }
+.band-head[data-state='now'] { color: #fff; background: var(--blue); }
+.band-head[data-state='now'] small { color: rgba(255, 255, 255, 0.85); }
+.band-head[data-state='done'] { color: #0c6b47; background: #d3f4e4; }
+.band-head[data-state='over'] { color: #c2410c; background: #ffe4dc; }
+.lv-block:not(.band) { z-index: 1; box-shadow: 0 0 0 2px #fff; }
+.lv-block.band[data-state='event'] { box-shadow: inset 4px 0 0 var(--event); border-left: 0; background: rgba(18, 184, 176, 0.13); }
 .lv-block[data-state='event'] { color: #06403f; background: #c9f0ee; border-left: 4px solid var(--event); }
 .lv-block[data-state='done'] { color: #0c6b47; background: #d3f4e4; }
-.lv-block[data-state='now'] { color: var(--ink); background: #fff; box-shadow: inset 0 0 0 2.5px var(--blue), 0 6px 14px -6px rgba(59, 108, 255, 0.6); z-index: 1; }
+.lv-block[data-state='now'] { color: var(--ink); background: #fff; box-shadow: inset 0 0 0 2.5px var(--blue), 0 6px 14px -6px rgba(59, 108, 255, 0.6); z-index: 2; }
 .lv-block[data-state='over'] { color: #c2410c; background: rgba(255, 90, 60, 0.08); outline: 1.6px dashed #ff5a3c; outline-offset: -1.6px; }
 .lv-now-line { position: absolute; left: 36px; right: 0; height: 2px; background: var(--ink); z-index: 3; pointer-events: none; }
 .lv-now-line i { position: absolute; left: -5px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); }
@@ -182,3 +193,11 @@
 .lv-role { display: inline-flex; align-items: center; gap: 4px; }
 .lv-role span { overflow: hidden; text-overflow: ellipsis; }
 .lv-over em, .lv-also em, .pick-hq b, .pr-top b { display: inline-flex; align-items: center; gap: 2px; }
+/* a 全員 block never comes to the front: its state shows as a tint and the title strip */
+.lv-block.band[data-state='now'] { z-index: 0; background: rgba(59, 108, 255, 0.08); box-shadow: inset 3px 0 0 var(--blue); color: var(--ink); }
+.lv-block.band[data-state='done'] { background: rgba(18, 160, 100, 0.1); box-shadow: inset 3px 0 0 #12a064; }
+.lv-block.band[data-state='over'] { background: rgba(255, 90, 60, 0.06); box-shadow: inset 3px 0 0 #ff5a3c; outline: 0; }
+.lv-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.lv-block.short span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* 当日モード: toasts sit above the bottom bar instead of covering its buttons */
+body:has(.lv-bar) .toasts { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 66px); }

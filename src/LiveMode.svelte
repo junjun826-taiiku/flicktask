@@ -113,11 +113,24 @@
     const cols = r.task.roles.map((x) => lanes.findIndex((l) => l.name === x)).filter((i) => i >= 0);
     return cols.length ? cols : null;
   };
-  /** everyone-items (全員 moves and 予定) get their own first column, so they never cover a 担当's blocks */
-  const bands = $derived(columnize(rows.filter((r) => laneOf(r) === null)));
-  /** per-role items share their role's column when they overlap */
+  const MIN_H = 22; // px: the shortest block still shows one line
+  const minSpan = Math.ceil(MIN_H / PX);
+  /** header strip of a 全員 block that 担当 blocks never cover, so its title stays readable */
+  const BAND_HEAD = 22;
+  /** everyone-items (全員 moves and 予定) span the whole board, like an all-hands event in Google Calendar;
+   *  if they overlap each other they split the width */
+  const bands = $derived(columnize(rows.filter((r) => laneOf(r) === null), minSpan));
+  /** per-role items share their role's column when they overlap, drawn over the 全員 blocks */
   const laneBlocks = $derived(
-    lanes.flatMap((_, li) => columnize(rows.filter((r) => laneOf(r)?.includes(li))).map((b) => ({ ...b, lane: li }))),
+    lanes.flatMap((_, li) =>
+      columnize(rows.filter((r) => laneOf(r)?.includes(li)), minSpan).map((b) => {
+        // keep clear of the title strip of a 全員 block that starts at (about) the same time
+        const band = bands.find((x) => x.start <= b.start && b.start * PX < x.start * PX + BAND_HEAD && b.start < x.end);
+        const top = band ? Math.max((b.start - span.from) * PX, (band.start - span.from) * PX + BAND_HEAD) : (b.start - span.from) * PX;
+        const bottom = (b.end - span.from) * PX - 2;
+        return { ...b, lane: li, top, height: Math.max(MIN_H, bottom - top) };
+      }),
+    ),
   );
   const rowState = (r: Row) => (r.isEvent ? 'event' : r.task.status === 'done' ? 'done' : r.start <= now && now < r.end ? 'now' : r.end <= now ? 'over' : 'todo');
 
@@ -326,13 +339,12 @@
       {#if delay > 0}
         <button class="lv-delay-banner" onclick={() => (delayOpen = true)} data-testid="live-delay-banner">＋{delay}分 押し中<span>変更</span></button>
       {/if}
-      <div class="lv-lanes-head" style="--n:{lanes.length + 1}">
+      <div class="lv-lanes-head" style="--n:{Math.max(1, lanes.length)}">
         <span></span>
-        <span style="--c:#868e96">全員</span>
         {#each lanes as l}<span style="--c:{COLOR_HEX[l.color]}">{l.name}</span>{/each}
       </div>
       <div class="lv-board-scroll">
-        <div class="lv-board" style="height:{(span.to - span.from) * PX}px; --n:{lanes.length + 1}" data-testid="live-board">
+        <div class="lv-board" style="height:{(span.to - span.from) * PX}px; --n:{Math.max(1, lanes.length)}" data-testid="live-board">
           {#each Array.from({ length: (span.to - span.from) / 60 + 1 }, (_, i) => span.from + i * 60) as h}
             <div class="lv-hour" style="top:{(h - span.from) * PX}px"><span>{h / 60}:00</span></div>
           {/each}
@@ -341,17 +353,27 @@
             <button
               class="lv-block band"
               data-state={st}
-              style="top:{(r.start - span.from) * PX}px; height:{Math.max(18, (r.end - r.start) * PX - 2)}px; --i:0; --col:{r.col}; --cols:{r.cols}"
+              style="top:{(r.start - span.from) * PX}px; height:{Math.max(MIN_H, (r.end - r.start) * PX - 2)}px; --col:{r.col}; --cols:{r.cols}"
               onclick={() => sheet.edit(r.task.id)}
               data-testid="board-block"
-            ><span>{st === 'done' ? '✓ ' : ''}{r.task.title}</span></button>
+              data-band
+            ><span class="lv-sr">{r.task.title}（{r.isEvent ? '予定' : '全員'}）</span></button>
+            <!-- the title rides above the 担当 blocks (a later start is drawn on top, as in Google Calendar) -->
+            <button
+              class="band-head"
+              data-state={st}
+              style="top:{(r.start - span.from) * PX}px; --col:{r.col}; --cols:{r.cols}"
+              onclick={() => sheet.edit(r.task.id)}
+              data-testid="band-head"
+            >{#if st === 'done'}<Icon name="check" size={12} />{/if}<span>{r.task.title}</span><small>{fromMin(r.start)}–{fromMin(r.end)}{r.isEvent ? '' : '・全員'}</small></button>
           {/each}
           {#each laneBlocks as r (r.task.id + ':' + r.lane)}
             {@const st = rowState(r)}
             <button
               class="lv-block"
+              class:short={r.height < 36}
               data-state={st}
-              style="top:{(r.start - span.from) * PX}px; height:{Math.max(18, (r.end - r.start) * PX - 2)}px; --i:{r.lane + 1}; --col:{r.col}; --cols:{r.cols}; --c:{COLOR_HEX[lanes[r.lane].color]}"
+              style="top:{r.top}px; height:{r.height}px; --i:{r.lane}; --col:{r.col}; --cols:{r.cols}; --c:{COLOR_HEX[lanes[r.lane].color]}"
               onclick={() => sheet.edit(r.task.id)}
               data-testid="board-block"
             ><span>{st === 'done' ? '✓ ' : ''}{r.task.title}</span></button>
