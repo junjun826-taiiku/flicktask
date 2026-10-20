@@ -132,6 +132,22 @@
       }),
     ),
   );
+  // board geometry in px: every 担当 column is at least LANE_MIN wide (wider when its items sit side by side);
+  // when that is more than the screen, the board scrolls sideways with the times and 担当 names pinned
+  const GUT = 42;
+  const LANE_MIN = 76;
+  const SUBCOL_MIN = 64;
+  let boardW = $state(0);
+  const laneW = $derived.by(() => {
+    const n = Math.max(1, lanes.length);
+    const fit = Math.max(0, boardW - GUT - 4) / n;
+    return Array.from({ length: n }, (_, i) => {
+      const cols = Math.max(1, ...laneBlocks.filter((b) => b.lane === i).map((b) => b.cols));
+      return Math.max(fit, LANE_MIN, cols * SUBCOL_MIN);
+    });
+  });
+  const laneX = $derived(laneW.map((_, i) => laneW.slice(0, i).reduce((a, b) => a + b, 0)));
+  const canvasW = $derived(laneW.reduce((a, b) => a + b, 0));
   const rowState = (r: Row) => (r.isEvent ? 'event' : r.task.status === 'done' ? 'done' : r.start <= now && now < r.end ? 'now' : r.end <= now ? 'over' : 'todo');
 
   // ---------- 押し ----------
@@ -339,21 +355,28 @@
       {#if delay > 0}
         <button class="lv-delay-banner" onclick={() => (delayOpen = true)} data-testid="live-delay-banner">＋{delay}分 押し中<span>変更</span></button>
       {/if}
-      <div class="lv-lanes-head" style="--n:{Math.max(1, lanes.length)}">
-        <span></span>
-        {#each lanes as l}<span style="--c:{COLOR_HEX[l.color]}">{l.name}</span>{/each}
-      </div>
-      <div class="lv-board-scroll">
-        <div class="lv-board" style="height:{(span.to - span.from) * PX}px; --n:{Math.max(1, lanes.length)}" data-testid="live-board">
+      <div class="lv-board-scroll" bind:clientWidth={boardW}>
+        <div class="lv-grid" style="width:{GUT + canvasW + 4}px">
+        <div class="lv-lanes-head">
+          <span class="lv-corner" style="width:{GUT}px"></span>
+          {#each lanes as l, i}<span style="width:{laneW[i] - 4}px; --c:{COLOR_HEX[l.color]}">{l.name}</span>{/each}
+        </div>
+        <div class="lv-board-row" style="height:{(span.to - span.from) * PX + 8}px">
+        <div class="lv-gutter" style="width:{GUT}px" aria-hidden="true">
           {#each Array.from({ length: (span.to - span.from) / 60 + 1 }, (_, i) => span.from + i * 60) as h}
-            <div class="lv-hour" style="top:{(h - span.from) * PX}px"><span>{h / 60}:00</span></div>
+            <span style="top:{(h - span.from) * PX}px">{h / 60}:00</span>
+          {/each}
+        </div>
+        <div class="lv-board" style="width:{canvasW}px; height:{(span.to - span.from) * PX}px" data-testid="live-board">
+          {#each Array.from({ length: (span.to - span.from) / 60 + 1 }, (_, i) => span.from + i * 60) as h}
+            <div class="lv-hour" style="top:{(h - span.from) * PX}px"></div>
           {/each}
           {#each bands as r (r.task.id)}
             {@const st = rowState(r)}
             <button
               class="lv-block band"
               data-state={st}
-              style="top:{(r.start - span.from) * PX}px; height:{Math.max(MIN_H, (r.end - r.start) * PX - 2)}px; --col:{r.col}; --cols:{r.cols}"
+              style="top:{(r.start - span.from) * PX}px; height:{Math.max(MIN_H, (r.end - r.start) * PX - 2)}px; left:{(canvasW * r.col) / r.cols}px; width:{canvasW / r.cols - 4}px"
               onclick={() => sheet.edit(r.task.id)}
               data-testid="board-block"
               data-band
@@ -362,7 +385,7 @@
             <button
               class="band-head"
               data-state={st}
-              style="top:{(r.start - span.from) * PX}px; --col:{r.col}; --cols:{r.cols}"
+              style="top:{(r.start - span.from) * PX}px; left:{(canvasW * r.col) / r.cols}px; max-width:{canvasW / r.cols - 4}px"
               onclick={() => sheet.edit(r.task.id)}
               data-testid="band-head"
             >{#if st === 'done'}<Icon name="check" size={12} />{/if}<span>{r.task.title}</span><small>{fromMin(r.start)}–{fromMin(r.end)}{r.isEvent ? '' : '・全員'}</small></button>
@@ -373,7 +396,7 @@
               class="lv-block"
               class:short={r.height < 36}
               data-state={st}
-              style="top:{r.top}px; height:{r.height}px; --i:{r.lane}; --col:{r.col}; --cols:{r.cols}; --c:{COLOR_HEX[lanes[r.lane].color]}"
+              style="top:{r.top}px; height:{r.height}px; left:{laneX[r.lane] + (laneW[r.lane] * r.col) / r.cols}px; width:{laneW[r.lane] / r.cols - 4}px; --c:{COLOR_HEX[lanes[r.lane].color]}"
               onclick={() => sheet.edit(r.task.id)}
               data-testid="board-block"
             ><span>{st === 'done' ? '✓ ' : ''}{r.task.title}</span></button>
@@ -381,6 +404,8 @@
           {#if now >= span.from && now <= span.to}
             <div class="lv-now-line" style="top:{(now - span.from) * PX}px" aria-hidden="true"><i></i></div>
           {/if}
+        </div>
+        </div>
         </div>
       </div>
       <div class="lv-legend" aria-hidden="true">

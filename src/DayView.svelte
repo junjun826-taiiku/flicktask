@@ -202,9 +202,10 @@
               class="block"
               class:dragging
               class:short={((p.end - p.start) / 60) * H < 40}
+              class:narrow={b.span / b.cols < 0.34}
               data-status={b.task.status}
               data-kind={b.task.kind}
-              style="top:{(p.start / 60) * H}px; height:{Math.max(((p.end - p.start) / 60) * H - 2, MIN_BLOCK)}px; left:calc({(b.col / b.cols) * 100}% + 2px); width:calc({100 / b.cols}% - 4px)"
+              style="top:{(p.start / 60) * H}px; height:{Math.max(((p.end - p.start) / 60) * H - 2, MIN_BLOCK)}px; --lines:{Math.max(1, Math.floor((((p.end - p.start) / 60) * H - 10) / 14))}; left:calc({(b.col / b.cols) * 100}% + 2px); width:calc({(100 * b.span) / b.cols}% - 4px)"
               onpointerdown={(e) => press(e, b, 'move')}
               onclick={(e) => (e.stopPropagation(), !justDragged && sheet.edit(b.task.id))}
               in:scale={{ start: 0.85, duration: 420, delay: i * 40, easing: backOut }}

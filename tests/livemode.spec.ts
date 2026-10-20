@@ -250,7 +250,7 @@ test('本部 board: 全員 items span the whole board; nothing hides a title', a
   const roles = await rect('[data-testid="board-block"]:not([data-band])');
   // a 全員 item that overlaps nothing else runs (almost) the full width of the board
   const obog = bands.find((b) => b.t!.includes('OBOG総会'))!;
-  expect(obog.x2 - obog.x1).toBeGreaterThan((boardBox.width - 46) * 0.95);
+  expect(obog.x2 - obog.x1).toBeGreaterThan(boardBox.width * 0.95);
   // 担当 blocks never overlap each other or a 全員 title strip; 全員 items never overlap each other
   for (const a of roles) for (const b of roles) if (a !== b) expect(hit(a, b), `${a.t} / ${b.t}`).toBe(false);
   // every title is on top where it is drawn: 全員 labels, and the first line of each 担当 block
@@ -260,8 +260,8 @@ test('本部 board: 全員 items span the whole board; nothing hides a title', a
       const top = document.elementFromPoint(x, y);
       if (!top || !(el === top || el.contains(top))) out.push(`${el.textContent} under ${top?.textContent}`);
     };
-    for (const el of root.querySelectorAll('[data-testid="band-head"]')) { el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); check(el, r.left + 10, r.top + r.height / 2); }
-    for (const el of root.querySelectorAll('[data-testid="board-block"]:not([data-band])')) { el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); check(el, r.left + 8, r.top + 8); }
+    for (const el of root.querySelectorAll('[data-testid="band-head"]')) { el.scrollIntoView({ block: 'center', inline: 'center' }); const r = el.getBoundingClientRect(); check(el, r.left + 10, r.top + r.height / 2); }
+    for (const el of root.querySelectorAll('[data-testid="board-block"]:not([data-band])')) { el.scrollIntoView({ block: 'center', inline: 'center' }); const r = el.getBoundingClientRect(); check(el, r.left + 8, r.top + 8); }
     return out;
   });
   expect(covered).toEqual([]);

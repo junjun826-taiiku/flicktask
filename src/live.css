@@ -80,18 +80,23 @@
 /* 全体 */
 .lv-delay-banner { flex: none; height: 40px; padding: 0 14px; border-radius: 12px; display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 800; color: #c2410c; background: rgba(255, 90, 60, 0.08); border: 1.6px dashed rgba(255, 90, 60, 0.6); }
 .lv-delay-banner span { margin-left: auto; }
-.lv-lanes-head { flex: none; display: grid; grid-template-columns: 40px repeat(var(--n), minmax(0, 1fr)); gap: 4px; font-size: 12px; font-weight: 800; text-align: center; }
-.lv-lanes-head span:not(:first-child) { padding: 4px 0; border-radius: 8px; color: color-mix(in srgb, var(--c) 70%, #000); background: color-mix(in srgb, var(--c) 15%, transparent); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.lv-board-scroll { flex: 1; min-height: 0; overflow-y: auto; border-radius: 16px; background: #fff; }
-.lv-board { position: relative; }
+.lv-board-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; border-radius: 16px; background: #fff; }
+.lv-grid { position: relative; min-width: 100%; }
+/* 担当 names stay on top while scrolling down; the time column stays put while scrolling sideways */
+.lv-lanes-head { position: sticky; top: 0; z-index: 6; display: flex; gap: 4px; padding: 6px 0 6px; font-size: 12px; font-weight: 800; text-align: center; background: #fff; }
+.lv-lanes-head span:not(.lv-corner) { flex: none; padding: 4px 4px; border-radius: 8px; color: color-mix(in srgb, var(--c) 70%, #000); background: color-mix(in srgb, var(--c) 15%, #fff); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.lv-corner { flex: none; position: sticky; left: 0; align-self: stretch; margin: -6px 0; background: #fff; }
+.lv-lanes-head .lv-corner { margin-right: -4px; }
+.lv-board-row { display: flex; padding-top: 4px; }
+.lv-gutter { flex: none; position: sticky; left: 0; z-index: 5; background: #fff; }
+.lv-gutter span { position: absolute; left: 6px; top: -6px; font-size: 11px; font-weight: 700; color: #6b7180; }
+.lv-board { position: relative; flex: none; }
 .lv-hour { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid rgba(20, 22, 28, 0.07); }
-.lv-hour span { position: absolute; left: 6px; top: 2px; font-size: 11px; font-weight: 700; color: #6b7180; }
-/* lane = (board width) / n; within a lane, overlapping items split it into --cols columns */
-.lv-block { --col: 0; --cols: 1; position: absolute; left: calc(42px + (100% - 46px) * (var(--i) + var(--col) / var(--cols)) / var(--n)); width: calc((100% - 46px) / var(--n) / var(--cols) - 4px); padding: 3px 6px; overflow: hidden; border-radius: 8px; text-align: left;
+.lv-block { position: absolute; padding: 3px 6px; overflow: hidden; border-radius: 8px; text-align: left;
   font-size: 11.5px; line-height: 15px; font-weight: 700; color: color-mix(in srgb, var(--c) 70%, #000); background: color-mix(in srgb, var(--c) 15%, #fff); }
 /* 全員 / 予定: across every 担当 column, behind them; the title strip on top stays clear */
-.lv-block.band { display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; left: calc(42px + (100% - 46px) * var(--col) / var(--cols)); width: calc((100% - 46px) / var(--cols) - 4px); z-index: 0; padding: 0; color: var(--ink-2); background: rgba(20, 22, 28, 0.05); box-shadow: inset 3px 0 0 #adb5bd; }
-.band-head { position: absolute; z-index: 3; left: calc(42px + (100% - 46px) * var(--col) / var(--cols)); max-width: calc((100% - 46px) / var(--cols) - 4px); height: 20px; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border-radius: 8px 8px 8px 0; font-size: 12px; font-weight: 800; color: var(--ink); background: #e6e8ee; box-shadow: 0 0 0 2px #fff; white-space: nowrap; overflow: hidden; }
+.lv-block.band { display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; z-index: 0; padding: 0; color: var(--ink-2); background: rgba(20, 22, 28, 0.05); box-shadow: inset 3px 0 0 #adb5bd; }
+.band-head { position: absolute; z-index: 3; height: 20px; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border-radius: 8px 8px 8px 0; font-size: 12px; font-weight: 800; color: var(--ink); background: #e6e8ee; box-shadow: 0 0 0 2px #fff; white-space: nowrap; overflow: hidden; }
 .band-head span { overflow: hidden; text-overflow: ellipsis; }
 .band-head small { flex: none; font-size: 10.5px; font-weight: 700; color: var(--ink-2); }
 .band-head[data-state='event'] { color: #06403f; background: #c9f0ee; }
@@ -105,7 +110,7 @@
 .lv-block[data-state='done'] { color: #0c6b47; background: #d3f4e4; }
 .lv-block[data-state='now'] { color: var(--ink); background: #fff; box-shadow: inset 0 0 0 2.5px var(--blue), 0 6px 14px -6px rgba(59, 108, 255, 0.6); z-index: 2; }
 .lv-block[data-state='over'] { color: #c2410c; background: rgba(255, 90, 60, 0.08); outline: 1.6px dashed #ff5a3c; outline-offset: -1.6px; }
-.lv-now-line { position: absolute; left: 36px; right: 0; height: 2px; background: var(--ink); z-index: 3; pointer-events: none; }
+.lv-now-line { position: absolute; left: -6px; right: 0; height: 2px; background: var(--ink); z-index: 3; pointer-events: none; }
 .lv-now-line i { position: absolute; left: -5px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); }
 .lv-legend { flex: none; display: flex; justify-content: center; gap: 14px; font-size: 11.5px; font-weight: 700; color: var(--ink-2); }
 .lv-legend span { display: inline-flex; align-items: center; gap: 4px; }

@@ -301,5 +301,15 @@
 
 /* short blocks: title and time on one line, so nothing spills into the block below */
 .block.short { flex-direction: row; align-items: center; gap: 6px; padding-top: 2px; padding-bottom: 2px; }
-.block.short strong { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.block.short span:not(.resize):not(.drag-time) { flex: none; white-space: nowrap; }
+/* the title wins the space; the time gets what is left (and is dropped when there is none) */
+.block.short strong { flex: 0 0 auto; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.block.short span:not(.resize):not(.drag-time) { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: clip; }
+/* many side by side (3+ columns): smaller type, words kept whole where possible */
+.block.narrow { padding: 4px 5px; }
+.block.narrow strong { font-size: 11px; line-height: 1.25; word-break: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--lines, 3); overflow: hidden; }
+.block.narrow span:not(.resize):not(.drag-time) { font-size: 9.5px; }
+.block.narrow.short strong { display: block; font-size: 10.5px; }
+.block.narrow.short span:not(.resize):not(.drag-time) { display: none; }
+/* the title keeps its line; the time below gives way first when a block is low */
+.block:not(.short) > strong { flex-shrink: 0; }
+.block:not(.short) > span:not(.resize):not(.drag-time) { flex-shrink: 1; min-height: 0; overflow: hidden; }

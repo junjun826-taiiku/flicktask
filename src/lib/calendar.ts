@@ -1,7 +1,8 @@
 import { coversDate, COLOR_HEX, type FEvent, type Task } from './store.svelte';
 import { toMin } from './dates';
 
-export type PlanBlock = { task: Task; start: number; end: number; col: number; cols: number };
+/** span: how many columns the block may take (it widens into free columns to its right) */
+export type PlanBlock = { task: Task; start: number; end: number; col: number; cols: number; span: number };
 
 /** Timed blocks for one day, laid out side by side where they overlap (Google Calendar style).
  *  minSpan: minutes the shortest drawn block covers, so a short block's label never sits under the next one. */
@@ -12,7 +13,7 @@ export function layoutBlocks(tasks: Task[], date: string, minSpan = 0): PlanBloc
     .map((t) => {
       const start = toMin(t.plan_start!);
       const end = t.plan_end ? Math.max(toMin(t.plan_end), start + 15) : start + 60;
-      return { task: t, start, end, col: 0, cols: 1 };
+      return { task: t, start, end, col: 0, cols: 1, span: 1 };
     })
     .sort((a, b) => a.start - b.start || b.end - a.end);
 
@@ -20,7 +21,12 @@ export function layoutBlocks(tasks: Task[], date: string, minSpan = 0): PlanBloc
   let clusterEnd = -1;
   const flush = () => {
     const cols = Math.max(1, ...cluster.map((b) => b.col + 1));
-    for (const b of cluster) b.cols = cols;
+    for (const b of cluster) {
+      b.cols = cols;
+      // widen while the next column is free for this block's whole time
+      const free = (c: number) => !cluster.some((o) => o.col === c && o.start < vend(b) && b.start < vend(o));
+      while (b.col + b.span < cols && free(b.col + b.span)) b.span++;
+    }
     cluster = [];
   };
   for (const b of items) {
