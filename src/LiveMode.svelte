@@ -9,7 +9,7 @@
   import { toasts } from './lib/toast.svelte';
   import { addDays, fromMin, nowMin, rangeLabel, today, toMin } from './lib/dates';
   import { vibrate } from './lib/motion';
-  import { addDelay, dayRows, eventDays, getDelay, getRoles, inMinutes, itemsList, liveDay, mine, setRoles, situation, type LiveRoles, type Row } from './lib/liveMode';
+  import { addDelay, columnize, dayRows, eventDays, getDelay, getRoles, inMinutes, itemsList, liveDay, mine, setRoles, situation, type LiveRoles, type Row } from './lib/liveMode';
 
   let { id }: { id: string } = $props();
 
@@ -106,6 +106,18 @@
     return { from, to };
   });
   const PX = 1.4; // px per minute
+  /** lane indexes a row occupies; null = everyone (全員 move or 予定) */
+  const laneOf = (r: Row) => {
+    if (r.isEvent || r.task.roles.length === 0) return null;
+    const cols = r.task.roles.map((x) => lanes.findIndex((l) => l.name === x)).filter((i) => i >= 0);
+    return cols.length ? cols : null;
+  };
+  /** everyone-items share the full width among themselves when they overlap */
+  const bands = $derived(columnize(rows.filter((r) => laneOf(r) === null)));
+  /** per-role items share their role's column when they overlap */
+  const laneBlocks = $derived(
+    lanes.flatMap((_, li) => columnize(rows.filter((r) => laneOf(r)?.includes(li))).map((b) => ({ ...b, lane: li }))),
+  );
   const rowState = (r: Row) => (r.isEvent ? 'event' : r.task.status === 'done' ? 'done' : r.start <= now && now < r.end ? 'now' : r.end <= now ? 'over' : 'todo');
 
   // ---------- 押し ----------
@@ -316,28 +328,25 @@
           {#each Array.from({ length: (span.to - span.from) / 60 + 1 }, (_, i) => span.from + i * 60) as h}
             <div class="lv-hour" style="top:{(h - span.from) * PX}px"><span>{h / 60}:00</span></div>
           {/each}
-          {#each rows as r (r.task.id)}
+          {#each bands as r (r.task.id)}
             {@const st = rowState(r)}
-            {@const cols = r.isEvent || r.task.roles.length === 0 ? null : r.task.roles.map((x) => lanes.findIndex((l) => l.name === x)).filter((i) => i >= 0)}
-            {#if cols === null || cols.length === 0}
-              <button
-                class="lv-block band"
-                data-state={st}
-                style="top:{(r.start - span.from) * PX}px; height:{Math.max(18, (r.end - r.start) * PX - 2)}px"
-                onclick={() => sheet.edit(r.task.id)}
-                data-testid="board-block"
-              ><span>{st === 'done' ? '✓ ' : ''}{r.task.title}{r.isEvent ? '' : '・全員'}</span></button>
-            {:else}
-              {#each cols as c}
-                <button
-                  class="lv-block"
-                  data-state={st}
-                  style="top:{(r.start - span.from) * PX}px; height:{Math.max(18, (r.end - r.start) * PX - 2)}px; --i:{c}; --c:{COLOR_HEX[lanes[c].color]}"
-                  onclick={() => sheet.edit(r.task.id)}
-                  data-testid="board-block"
-                ><span>{st === 'done' ? '✓ ' : ''}{r.task.title}</span></button>
-              {/each}
-            {/if}
+            <button
+              class="lv-block band"
+              data-state={st}
+              style="top:{(r.start - span.from) * PX}px; height:{Math.max(18, (r.end - r.start) * PX - 2)}px; --col:{r.col}; --cols:{r.cols}"
+              onclick={() => sheet.edit(r.task.id)}
+              data-testid="board-block"
+            ><span>{st === 'done' ? '✓ ' : ''}{r.task.title}{r.isEvent ? '' : '・全員'}</span></button>
+          {/each}
+          {#each laneBlocks as r (r.task.id + ':' + r.lane)}
+            {@const st = rowState(r)}
+            <button
+              class="lv-block"
+              data-state={st}
+              style="top:{(r.start - span.from) * PX}px; height:{Math.max(18, (r.end - r.start) * PX - 2)}px; --i:{r.lane}; --col:{r.col}; --cols:{r.cols}; --c:{COLOR_HEX[lanes[r.lane].color]}"
+              onclick={() => sheet.edit(r.task.id)}
+              data-testid="board-block"
+            ><span>{st === 'done' ? '✓ ' : ''}{r.task.title}</span></button>
           {/each}
           {#if now >= span.from && now <= span.to}
             <div class="lv-now-line" style="top:{(now - span.from) * PX}px" aria-hidden="true"><i></i></div>
