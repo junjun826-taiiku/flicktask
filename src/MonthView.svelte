@@ -20,6 +20,22 @@
   const fitAll = $derived(Math.max(1, Math.floor((rowH - 31) / 18)));
   const fitWithMore = $derived(Math.max(1, Math.floor((rowH - 45) / 18)));
 
+  /** where a multi-day bar's name is written: its first day and each week row it wraps onto, across the whole run */
+  const barLabels = $derived.by(() => {
+    const out: { key: string; title: string; kind: string; color?: string; row: number; col: number; run: number; slot: number }[] = [];
+    days.forEach((d, i) => {
+      const items = monthItems(store.tasks, d, store.liveEvents);
+      const shown = items.length > fitAll ? fitWithMore : fitAll;
+      items.slice(0, shown).forEach((it, slot) => {
+        if (it.span === 'single' || !(it.span === 'start' || i % 7 === 0)) return;
+        let run = 1;
+        while ((i + run) % 7 !== 0 && i + run < days.length && days[i + run] <= it.end) run++;
+        out.push({ key: `${it.task.id}:${d}`, title: it.task.title, kind: it.kind, color: it.color, row: Math.floor(i / 7), col: i % 7, run, slot });
+      });
+    });
+    return out;
+  });
+
   const page = (n: 1 | -1) => router.setMonth(addMonths(month, n), n);
   const swipe = useSwipe((dir) => page(dir));
 </script>
@@ -70,11 +86,19 @@
             <span class="m-item {it.kind}" data-status={it.task.status} data-span={it.span} style={it.color ? `--c:${it.color}` : undefined} data-testid="m-{it.kind}">
               {#if it.kind === 'due'}<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 11V1.5h6L7.8 4 9 6.5H3" /></svg>{/if}
               <!-- a multi-day bar is labelled on its first day and where it wraps onto a new week row -->
-              <span class:quiet={it.span === 'mid' || (it.span === 'end' && i % 7 !== 0)}>{it.task.title}</span>
+              <span class:quiet={it.span !== 'single'}>{it.task.title}</span>
             </span>
           {/each}
           {#if items.length > shown}<span class="more" data-testid="m-more">+{items.length - shown}</span>{/if}
         </button>
+      {/each}
+      {#each barLabels as l (l.key)}
+        <span
+          class="m-bar-label {l.kind}"
+          style="--row:{l.row}; --col:{l.col}; --run:{l.run}; --slot:{l.slot}"
+          aria-hidden="true"
+          data-testid="m-bar-label">{l.title}</span
+        >
       {/each}
     </div>
   {/key}

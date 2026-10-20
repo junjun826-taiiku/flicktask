@@ -63,6 +63,8 @@ export type MonthItem = {
   time: string | null;
   /** for multi-day bars: where this cell sits in the range */
   span: 'single' | 'start' | 'mid' | 'end';
+  /** last day of a multi-day bar */
+  end: string;
 };
 
 /** Everything to show in one month cell: blocks first (by time), then deadlines. */
@@ -73,19 +75,21 @@ export function monthItems(tasks: Task[], date: string, events: FEvent[] = []): 
     const span = e.start_date === e.end_date ? 'single' : date === e.start_date ? 'start' : date === e.end_date ? 'end' : 'mid';
     // shaped like a Task so the cell template can treat it the same way
     const task = { id: `meet:${e.id}`, title: e.name, status: 'todo', plan_date: e.start_date, created_at: 0 } as Task;
-    out.push({ task, kind: 'meet', time: null, span, color: COLOR_HEX[e.color] });
+    out.push({ task, kind: 'meet', time: null, span, color: COLOR_HEX[e.color], end: e.end_date });
   }
   for (const t of tasks) {
     if (t.deleted) continue;
     if (coversDate(t, date)) {
       const end = t.plan_end_date ?? t.plan_date;
       const span = t.plan_date === end ? 'single' : date === t.plan_date ? 'start' : date === end ? 'end' : 'mid';
-      out.push({ task: t, kind: t.kind === 'event' ? 'event' : 'plan', time: t.plan_start, span });
+      out.push({ task: t, kind: t.kind === 'event' ? 'event' : 'plan', time: t.plan_start, span, end: end! });
     }
-    if (t.due_date === date) out.push({ task: t, kind: 'due', time: t.due_time, span: 'single' });
+    if (t.due_date === date) out.push({ task: t, kind: 'due', time: t.due_time, span: 'single', end: date });
   }
   // multi-day bars first (stable rows across cells), then by time; deadlines last
   // イベント bars first, then other multi-day bars (stable rows across cells), then by time; deadlines last
-  const key = (i: MonthItem) => (i.kind === 'meet' ? -1 : i.kind === 'due' ? 2 : i.span === 'single' ? 1 : 0) * 10000 + (i.time ? toMin(i.time) : -1);
+  // every multi-day bar comes before any single item, so a single item that wraps onto two lines never shifts a bar
+  const rank = (i: MonthItem) => (i.span !== 'single' ? (i.kind === 'meet' ? -3 : -2) : i.kind === 'meet' ? -1 : i.kind === 'due' ? 2 : 1);
+  const key = (i: MonthItem) => rank(i) * 10000 + (i.time ? toMin(i.time) : -1);
   return out.sort((a, b) => key(a) - key(b) || (a.task.plan_date ?? '').localeCompare(b.task.plan_date ?? '') || a.task.id.localeCompare(b.task.id));
 }

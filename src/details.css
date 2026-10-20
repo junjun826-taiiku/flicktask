@@ -313,3 +313,22 @@
 /* the title keeps its line; the time below gives way first when a block is low */
 .block:not(.short) > strong { flex-shrink: 0; }
 .block:not(.short) > span:not(.resize):not(.drag-time) { flex-shrink: 1; min-height: 0; overflow: hidden; }
+
+/* the name of a multi-day bar runs along the whole bar (to the end of the week row), above the cells */
+.m-bar-label { position: absolute; z-index: 2; pointer-events: none;
+  left: calc((100% - 18px) / 7 * var(--col) + 3px * var(--col) + 7px);
+  width: calc((100% - 18px) / 7 * var(--run) + 3px * (var(--run) - 1) - 14px);
+  top: calc((100% - 15px) / 6 * var(--row) + 3px * var(--row) + 29px + 18px * var(--slot));
+  height: 16px; font-size: 10px; font-weight: 700; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; }
+.m-bar-label.meet { font-weight: 800; }
+.m-bar-label.event { color: #06403f; }
+/* rows stay put horizontally (bars join across cells) but nothing spills into the row below */
+.cell { overflow: visible clip; }
+/* phones: a single-day name may take two lines instead of being cut */
+@media (max-width: 600px) {
+  .m-item[data-span='single'] { height: auto; min-height: 16px; padding-top: 1px; padding-bottom: 1px; line-height: 12px; }
+  .m-item[data-span='single'] span { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: 9.5px; }
+}
+/* a bar that continues into the next week stops at the edge of its row */
+.cell.sat .m-item[data-span='start'], .cell.sat .m-item[data-span='mid'] { margin-right: 0; }
+.cell.sun .m-item[data-span='mid'], .cell.sun .m-item[data-span='end'] { margin-left: 0; }

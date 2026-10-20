@@ -118,3 +118,17 @@ test('ranges sync to another device @local', async ({ page, browser }) => {
   await expect(eventCard(p2, '連日の大会').getByTestId('event-range')).toHaveText(`${md(plusDays(5))}〜${md(plusDays(6))}`);
   await other.close();
 });
+
+test('a multi-day name runs along its bar instead of being cut at the first day', async ({ page }) => {
+  await page.addInitScript(() => {
+    const base = { status: 'todo', kind: 'event', deleted: false, note: '', due_date: null, due_time: null, plan_start: null, plan_end: null, created_at: 1, updated_at: 1 };
+    localStorage.setItem('ft.tasks.v1', JSON.stringify([{ ...base, id: 'w1', title: '2026 冬季合宿（菅平）', plan_date: '2026-12-24', plan_end_date: '2026-12-29' }]));
+  });
+  await page.goto('/calendar?m=2026-12-01');
+  const labels = page.getByTestId('m-bar-label');
+  await expect(labels).toHaveCount(2); // 24th, and again where it wraps onto the next week (27th)
+  const cell = (await page.locator('[data-date="2026-12-24"]').boundingBox())!;
+  const first = (await labels.first().boundingBox())!;
+  expect(first.width).toBeGreaterThan(cell.width * 2); // spans 24–26, not one cell
+  expect(await labels.first().evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true); // nothing cut
+});
