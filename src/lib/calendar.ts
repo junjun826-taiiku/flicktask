@@ -1,4 +1,4 @@
-import type { Task } from './store.svelte';
+import { coversDate, type Task } from './store.svelte';
 import { toMin } from './dates';
 
 export type PlanBlock = { task: Task; start: number; end: number; col: number; cols: number };
@@ -41,21 +41,32 @@ export const timedDeadlines = (tasks: Task[], date: string) =>
     .sort((a, b) => a.at - b.at);
 
 export const allDay = (tasks: Task[], date: string) => ({
-  plans: tasks.filter((t) => !t.deleted && t.plan_date === date && !t.plan_start),
+  plans: tasks.filter((t) => !t.deleted && !t.plan_start && coversDate(t, date)),
   dues: tasks.filter((t) => !t.deleted && t.kind === 'task' && t.due_date === date && !t.due_time),
 });
 
 /** event = calendar-only 予定, plan = a task's やる時間, due = a task's 期限 */
-export type MonthItem = { task: Task; kind: 'event' | 'plan' | 'due'; time: string | null };
+export type MonthItem = {
+  task: Task;
+  kind: 'event' | 'plan' | 'due';
+  time: string | null;
+  /** for multi-day bars: where this cell sits in the range */
+  span: 'single' | 'start' | 'mid' | 'end';
+};
 
 /** Everything to show in one month cell: blocks first (by time), then deadlines. */
 export function monthItems(tasks: Task[], date: string): MonthItem[] {
   const out: MonthItem[] = [];
   for (const t of tasks) {
     if (t.deleted) continue;
-    if (t.plan_date === date) out.push({ task: t, kind: t.kind === 'event' ? 'event' : 'plan', time: t.plan_start });
-    if (t.due_date === date) out.push({ task: t, kind: 'due', time: t.due_time });
+    if (coversDate(t, date)) {
+      const end = t.plan_end_date ?? t.plan_date;
+      const span = t.plan_date === end ? 'single' : date === t.plan_date ? 'start' : date === end ? 'end' : 'mid';
+      out.push({ task: t, kind: t.kind === 'event' ? 'event' : 'plan', time: t.plan_start, span });
+    }
+    if (t.due_date === date) out.push({ task: t, kind: 'due', time: t.due_time, span: 'single' });
   }
-  const key = (i: MonthItem) => (i.kind === 'due' ? 1 : 0) * 10000 + (i.time ? toMin(i.time) : -1);
-  return out.sort((a, b) => key(a) - key(b));
+  // multi-day bars first (stable rows across cells), then by time; deadlines last
+  const key = (i: MonthItem) => (i.kind === 'due' ? 2 : i.span === 'single' ? 1 : 0) * 10000 + (i.time ? toMin(i.time) : -1);
+  return out.sort((a, b) => key(a) - key(b) || (a.task.plan_date ?? '').localeCompare(b.task.plan_date ?? '') || a.task.id.localeCompare(b.task.id));
 }

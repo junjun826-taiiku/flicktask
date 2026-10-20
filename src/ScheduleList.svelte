@@ -10,10 +10,13 @@
   // group calendar-only entries by date, today first
   const groups = $derived.by(() => {
     const out: { date: string; items: typeof store.upcoming }[] = [];
+    const t = today();
     for (const e of store.upcoming) {
+      // a multi-day entry that started earlier but is still running is listed under today
+      const day = e.plan_date! < t ? t : e.plan_date!;
       const last = out[out.length - 1];
-      if (last?.date === e.plan_date) last.items.push(e);
-      else out.push({ date: e.plan_date!, items: [e] });
+      if (last?.date === day) last.items.push(e);
+      else out.push({ date: day, items: [e] });
     }
     return out;
   });
@@ -21,6 +24,12 @@
   const heading = (d: string) => {
     const s = shortLabel(d);
     return s === '今日' || s === '明日' ? `${s} ${dayLabel(d)}` : dayLabel(d);
+  };
+
+  /** "10/21〜10/22" for a multi-day entry */
+  const range = (a: string, b: string) => {
+    const f = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
+    return `${f(a)}〜${f(b)}`;
   };
 
   function add() {
@@ -49,6 +58,7 @@
                   {#if e.plan_end}<span>{e.plan_end}</span>{/if}
                 {:else}
                   <strong>終日</strong>
+                  {#if e.plan_end_date}<span data-testid="event-range">{range(e.plan_date!, e.plan_end_date)}</span>{/if}
                 {/if}
               </span>
               <span class="event-bar" aria-hidden="true"></span>

@@ -65,9 +65,10 @@
         >
           <span class="num">{Number(d.slice(8))}</span>
           {#each items.slice(0, shown) as it}
-            <span class="m-item {it.kind}" data-status={it.task.status} data-testid="m-{it.kind}">
+            <span class="m-item {it.kind}" data-status={it.task.status} data-span={it.span} data-testid="m-{it.kind}">
               {#if it.kind === 'due'}<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 11V1.5h6L7.8 4 9 6.5H3" /></svg>{/if}
-              <span>{it.task.title}</span>
+              <!-- a multi-day bar is labelled on its first day and where it wraps onto a new week row -->
+              <span class:quiet={it.span === 'mid' || (it.span === 'end' && i % 7 !== 0)}>{it.task.title}</span>
             </span>
           {/each}
           {#if items.length > shown}<span class="more" data-testid="m-more">+{items.length - shown}</span>{/if}

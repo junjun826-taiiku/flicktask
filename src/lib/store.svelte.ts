@@ -18,6 +18,8 @@ export type Task = {
   plan_date: string | null;
   plan_start: string | null;
   plan_end: string | null;
+  /** Last day of a multi-day (all-day) entry, inclusive. null = single day. */
+  plan_end_date: string | null;
   /** 'task' = to-do with a status; 'event' = calendar-only schedule entry (never in the task list). */
   kind: Kind;
 };
@@ -29,13 +31,17 @@ const localToday = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
-export type Details = Pick<Task, 'title' | 'note' | 'due_date' | 'due_time' | 'plan_date' | 'plan_start' | 'plan_end' | 'status' | 'kind'>;
+export type Details = Pick<Task, 'title' | 'note' | 'due_date' | 'due_time' | 'plan_date' | 'plan_start' | 'plan_end' | 'plan_end_date' | 'status' | 'kind'>;
 
-const EMPTY_DETAILS = { note: '', due_date: null, due_time: null, plan_date: null, plan_start: null, plan_end: null, kind: 'task' as Kind };
+const EMPTY_DETAILS = { note: '', due_date: null, due_time: null, plan_date: null, plan_start: null, plan_end: null, plan_end_date: null, kind: 'task' as Kind };
 /** Tasks saved before details existed (or coming from an older server) get the new fields filled in. */
 const normalize = (t: any): Task => ({ ...EMPTY_DETAILS, ...t, note: t.note ?? '', kind: t.kind === 'event' ? 'event' : 'task' });
 export type User = { id: string; email: string; name: string | null; picture: string | null };
 export type Filter = 'all' | Status;
+
+/** Does this item's scheduled date (or multi-day range) include `date`? */
+export const coversDate = (t: Pick<Task, 'plan_date' | 'plan_end_date'>, date: string) =>
+  !!t.plan_date && t.plan_date <= date && date <= (t.plan_end_date ?? t.plan_date);
 
 export const STATUS_ORDER: Status[] = ['todo', 'doing', 'done'];
 export const STATUS_LABEL: Record<Status, string> = { todo: '未着手', doing: '進行中', done: '完了' };
@@ -71,11 +77,11 @@ class Store {
     for (const t of this.tasks) if (!t.deleted && t.kind === 'task') (c.all++, c[t.status]++);
     return c;
   });
-  /** Calendar-only entries from today on, in date/time order (all-day first within a day). */
+  /** Calendar-only entries that end today or later, in date/time order (all-day first within a day). */
   upcoming = $derived.by(() => {
     const today = localToday();
     return this.tasks
-      .filter((t) => !t.deleted && t.kind === 'event' && t.plan_date && t.plan_date >= today)
+      .filter((t) => !t.deleted && t.kind === 'event' && t.plan_date && (t.plan_end_date ?? t.plan_date) >= today)
       .sort((a, b) => a.plan_date!.localeCompare(b.plan_date!) || (a.plan_start ?? '').localeCompare(b.plan_start ?? ''));
   });
   /** Which half of the home screen is showing on phones (both show side by side on wide screens). */
@@ -122,7 +128,10 @@ class Store {
     if (!t) return;
     if (patch.title !== undefined && !patch.title.trim()) delete patch.title;
     if (patch.due_date === null) patch.due_time = null;
-    if (patch.plan_date === null) (patch.plan_start = null), (patch.plan_end = null);
+    if (patch.plan_date === null) (patch.plan_start = null), (patch.plan_end = null), (patch.plan_end_date = null);
+    // multi-day entries are all-day
+    if (patch.plan_end_date && patch.plan_date && patch.plan_end_date > patch.plan_date) (patch.plan_start = null), (patch.plan_end = null);
+    else if (patch.plan_end_date !== undefined && (!patch.plan_end_date || patch.plan_end_date <= (patch.plan_date ?? t.plan_date ?? ''))) patch.plan_end_date = null;
     const changed = (Object.keys(patch) as (keyof Details)[]).some((k) => t[k] !== patch[k]);
     if (changed) this.#touch(id, patch);
   }

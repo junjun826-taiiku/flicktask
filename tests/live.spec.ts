@@ -67,10 +67,17 @@ test('a device that was offline catches up when it reconnects @local', async ({ 
   await b.ctx.close();
 });
 
-test('the live endpoint requires a session', async ({ request }) => {
-  // a complete handshake; Cloudflare's edge answers 400 to a partial one before the app sees it
-  const res = await request.get('/api/live', {
-    headers: { Upgrade: 'websocket', Connection: 'Upgrade', 'Sec-WebSocket-Version': '13', 'Sec-WebSocket-Key': 'dGhlIHNhbXBsZSBub25jZQ==' },
-  });
-  expect(res.status()).toBe(401);
+test('the live endpoint requires a session', async ({ page }) => {
+  // a real browser WebSocket while signed out must never open (the server answers 401, not 101)
+  await page.goto('/');
+  const outcome = await page.evaluate(
+    () =>
+      new Promise<string>((resolve) => {
+        const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/live?cid=probe`);
+        ws.onopen = () => (resolve('open'), ws.close());
+        ws.onerror = () => resolve('rejected');
+        setTimeout(() => resolve('timeout'), 5000);
+      }),
+  );
+  expect(outcome).toBe('rejected');
 });

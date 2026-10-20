@@ -160,7 +160,7 @@ app.get('/api/live', (c) => {
 
 app.get('/api/tasks', async (c) => {
   const { results } = await c.env.DB.prepare(
-    `SELECT id, title, status, created_at, updated_at, deleted, note, due_date, due_time, plan_date, plan_start, plan_end, kind
+    `SELECT id, title, status, created_at, updated_at, deleted, note, due_date, due_time, plan_date, plan_start, plan_end, kind, plan_end_date
      FROM tasks WHERE user_id = ? ORDER BY created_at DESC`,
   )
     .bind(c.get('user').id)
@@ -181,6 +181,7 @@ type TaskIn = {
   plan_date?: string | null;
   plan_start?: string | null;
   plan_end?: string | null;
+  plan_end_date?: string | null;
   kind?: 'task' | 'event';
 };
 
@@ -197,7 +198,8 @@ app.post('/api/tasks/sync', async (c) => {
     if (typeof t.title !== 'string' || t.title.length > 2000) return c.json({ error: 'bad title' }, 400);
     if (!STATUSES.includes(t.status as any)) return c.json({ error: 'bad status' }, 400);
     if (t.note != null && (typeof t.note !== 'string' || t.note.length > 20000)) return c.json({ error: 'bad note' }, 400);
-    if (!isDate(t.due_date) || !isDate(t.plan_date)) return c.json({ error: 'bad date' }, 400);
+    if (!isDate(t.due_date) || !isDate(t.plan_date) || !isDate(t.plan_end_date)) return c.json({ error: 'bad date' }, 400);
+    if (t.plan_end_date && (!t.plan_date || t.plan_end_date < t.plan_date)) return c.json({ error: 'bad range' }, 400);
     if (!isTime(t.due_time) || !isTime(t.plan_start) || !isTime(t.plan_end)) return c.json({ error: 'bad time' }, 400);
     if (t.kind != null && t.kind !== 'task' && t.kind !== 'event') return c.json({ error: 'bad kind' }, 400);
   }
@@ -206,13 +208,13 @@ app.post('/api/tasks/sync', async (c) => {
       tasks.map((t) =>
         c.env.DB.prepare(
           `INSERT INTO tasks (id, user_id, title, status, created_at, updated_at, deleted,
-             note, due_date, due_time, plan_date, plan_start, plan_end, kind)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             note, due_date, due_time, plan_date, plan_start, plan_end, kind, plan_end_date)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status,
              updated_at = excluded.updated_at, deleted = excluded.deleted, note = excluded.note,
              due_date = excluded.due_date, due_time = excluded.due_time,
              plan_date = excluded.plan_date, plan_start = excluded.plan_start, plan_end = excluded.plan_end,
-             kind = excluded.kind
+             kind = excluded.kind, plan_end_date = excluded.plan_end_date
            WHERE tasks.user_id = excluded.user_id AND excluded.updated_at > tasks.updated_at`,
         ).bind(
           t.id,
@@ -229,6 +231,8 @@ app.post('/api/tasks/sync', async (c) => {
           t.plan_date ? (t.plan_start ?? null) : null,
           t.plan_date ? (t.plan_end ?? null) : null,
           t.kind ?? 'task',
+          // a range that ends on its start day is just a single day
+          t.plan_date && t.plan_end_date && t.plan_end_date > t.plan_date ? t.plan_end_date : null,
         ),
       ),
     );

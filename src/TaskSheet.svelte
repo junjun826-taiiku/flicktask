@@ -8,10 +8,12 @@
   import { fromMin, toMin, today } from './lib/dates';
   import { vibrate } from './lib/motion';
 
-  const blank = (): Details => ({ title: '', status: 'todo', kind: 'task', note: '', due_date: null, due_time: null, plan_date: null, plan_start: null, plan_end: null });
+  const blank = (): Details => ({ title: '', status: 'todo', kind: 'task', note: '', due_date: null, due_time: null, plan_date: null, plan_start: null, plan_end: null, plan_end_date: null });
   const isEvent = $derived(draft.kind === 'event');
   /** position of the sliding thumb: the three statuses, then 予定 (calendar only) */
   const pickIndex = $derived(isEvent ? 3 : STATUS_ORDER.indexOf(draft.status));
+  /** a 予定 spanning several days (always all-day) */
+  const multiDay = $derived(isEvent && !!draft.plan_end_date && !!draft.plan_date && draft.plan_end_date > draft.plan_date);
 
   let draft = $state<Details>(blank());
   let isNew = $state(false);
@@ -32,7 +34,7 @@
     const t = id ? store.tasks.find((x) => x.id === id) : null;
     isNew = !t;
     draft = t
-      ? { title: t.title, status: t.status, kind: t.kind, note: t.note, due_date: t.due_date, due_time: t.due_time, plan_date: t.plan_date, plan_start: t.plan_start, plan_end: t.plan_end }
+      ? { title: t.title, status: t.status, kind: t.kind, note: t.note, due_date: t.due_date, due_time: t.due_time, plan_date: t.plan_date, plan_start: t.plan_start, plan_end: t.plan_end, plan_end_date: t.plan_end_date }
       : { ...blank(), ...sheet.prefill };
     dy = 0;
     tick().then(() => {
@@ -58,7 +60,9 @@
       d.due_date = d.due_time = null;
       d.plan_date ??= today();
       if (!d.plan_start) d.plan_end = null;
-    }
+      if (d.plan_end_date && d.plan_end_date > d.plan_date!) d.plan_start = d.plan_end = null;
+      else d.plan_end_date = null;
+    } else d.plan_end_date = null; // ranges are for 予定 only
     if (isNew) {
       if (d.title.trim()) {
         const { title, ...rest } = d;
@@ -79,6 +83,8 @@
     vibrate(12);
     toasts.show('削除しました', { label: '元に戻す', run: () => store.restore(id) });
   }
+
+  const dayCount = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000) + 1;
 
   function pickEvent() {
     draft.kind = 'event';
@@ -250,12 +256,27 @@
         </button>
         {#if draft.plan_date}
           <div class="inputs" transition:slide={{ duration: 280, easing: cubicOut }}>
-            <input type="date" bind:value={draft.plan_date} required aria-label="やる日" data-testid="sheet-plan-date" />
+            <input type="date" bind:value={draft.plan_date} required aria-label={isEvent ? '開始日' : 'やる日'} data-testid="sheet-plan-date" />
+            {#if isEvent}
+              <!-- optional last day: a later date makes it a multi-day, all-day 予定 -->
+              <label class="end-date">
+                <span>〜 終了日</span>
+                <input type="date" bind:value={draft.plan_end_date} min={draft.plan_date} aria-label="終了日" data-testid="sheet-plan-end-date" />
+                {#if draft.plan_end_date}
+                  <button class="clear" onclick={() => (draft.plan_end_date = null)} aria-label="終了日を外す">×</button>
+                {/if}
+              </label>
+            {/if}
+            {#if !multiDay}
             <input type="time" bind:value={draft.plan_start} aria-label="開始時刻" data-testid="sheet-plan-start" />
             <span class="dash">–</span>
             <input type="time" bind:value={draft.plan_end} aria-label="終了時刻" data-testid="sheet-plan-end" />
-            {#if isEvent}
+            {/if}
+            {#if isEvent && !multiDay}
               <button class="allday-btn" class:on={!draft.plan_start} onclick={() => (draft.plan_start ? ((draft.plan_start = null), (draft.plan_end = null)) : setTimes())} data-testid="sheet-allday">終日</button>
+            {/if}
+            {#if multiDay}
+              <span class="multi-note" data-testid="sheet-multiday">終日・{dayCount(draft.plan_date!, draft.plan_end_date!)}日間</span>
             {/if}
           </div>
         {/if}

@@ -264,7 +264,7 @@
 .day-group li { margin-bottom: 8px; }
 .event-card { width: 100%; display: flex; align-items: stretch; gap: 12px; padding: 12px 14px; text-align: left; transition: transform 0.3s var(--spring); }
 .event-card:active { transform: scale(0.98); }
-.event-time { flex: none; width: 46px; display: flex; flex-direction: column; justify-content: center; font-variant-numeric: tabular-nums; }
+.event-time { flex: none; min-width: 46px; max-width: 84px; display: flex; flex-direction: column; justify-content: center; font-variant-numeric: tabular-nums; }
 .event-time strong { font-size: 14px; font-weight: 750; }
 .event-time span { font-size: 11.5px; color: var(--ink-3); font-weight: 600; }
 .event-time.allday strong { font-size: 12px; color: var(--event-2); }
@@ -284,3 +284,15 @@
 
 /* live connection down: grey dot (local edits still save and sync on reconnect) */
 .sync.offline:not(.on) { background: #b4b9c5; }
+
+/* ---------- multi-day bars in the month grid: square, bleeding into the 3px cell gap ---------- */
+.cell { overflow: visible; }
+.m-item[data-span='start'] { border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: -6px; }
+.m-item[data-span='mid'] { border-radius: 0; margin-left: -6px; margin-right: -6px; }
+.m-item[data-span='end'] { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: -6px; }
+.m-item[data-span='mid'], .m-item[data-span='end'] { box-shadow: none; }
+.m-item .quiet { visibility: hidden; }
+.plan .inputs .end-date { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--ink-2); }
+.plan .inputs .end-date input { flex: 1; }
+.multi-note { grid-column: 1 / -1; font-size: 12.5px; font-weight: 700; color: var(--event-2); }
+.event-time span[data-testid=event-range] { font-size: 11px; white-space: nowrap; }
