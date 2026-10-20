@@ -158,14 +158,69 @@ app.get('/api/live', (c) => {
   return hub(c).fetch(c.req.raw);
 });
 
+const TASK_COLS =
+  'id, title, status, created_at, updated_at, deleted, note, due_date, due_time, plan_date, plan_start, plan_end, kind, plan_end_date';
+const rows = (results: any[]) => results.map((t) => ({ ...t, deleted: !!t.deleted }));
+
+/** Deleted rows are purged from the server this long after deletion; older cursors must resync in full. */
+const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+/** Cursor overlap: rows written around the moment of a read are fetched again rather than missed. */
+const CURSOR_SKEW_MS = 5000;
+
+// Legacy: the whole list. Kept so a tab still running an older build keeps working until it reloads.
 app.get('/api/tasks', async (c) => {
-  const { results } = await c.env.DB.prepare(
-    `SELECT id, title, status, created_at, updated_at, deleted, note, due_date, due_time, plan_date, plan_start, plan_end, kind, plan_end_date
-     FROM tasks WHERE user_id = ? ORDER BY created_at DESC`,
-  )
+  const { results } = await c.env.DB.prepare(`SELECT ${TASK_COLS} FROM tasks WHERE user_id = ? ORDER BY created_at DESC`)
     .bind(c.get('user').id)
     .all();
-  return c.json(results.map((t: any) => ({ ...t, deleted: !!t.deleted })));
+  return c.json(rows(results));
+});
+
+/**
+ * Incremental sync.
+ *  - without `since` (first load / reset): the device's working set only — unfinished tasks, anything
+ *    dated or touched within the window, 予定 that haven't ended before `from` — not years of history.
+ *  - with `since`: every row the server stamped after it, deletions included.
+ * Returns a cursor for the next call. `reset: true` = the cursor was too old (tombstones may be gone),
+ * so this is a fresh working set and the device should drop what it isn't told about.
+ */
+app.get('/api/tasks/changes', async (c) => {
+  const userId = c.get('user').id;
+  const now = Date.now();
+  const since = Number(c.req.query('since') ?? '');
+  const from = c.req.query('from') ?? '';
+  const cutoff = Number(c.req.query('cutoff') ?? '') || now - 60 * 86_400_000;
+  const cursor = now - CURSOR_SKEW_MS;
+  if (since && since > now - TOMBSTONE_TTL_MS) {
+    const { results } = await c.env.DB.prepare(`SELECT ${TASK_COLS} FROM tasks WHERE user_id = ? AND synced_at > ?`)
+      .bind(userId, since)
+      .all();
+    return c.json({ tasks: rows(results), cursor, reset: false });
+  }
+  if (!isDate(from) || !from) return c.json({ error: 'bad from' }, 400);
+  const { results } = await c.env.DB.prepare(
+    `SELECT ${TASK_COLS} FROM tasks WHERE user_id = ?3 AND deleted = 0 AND (
+       (kind = 'event' AND COALESCE(plan_end_date, plan_date, '9999-12-31') >= ?1)
+       OR (kind = 'task' AND (status != 'done' OR updated_at >= ?2
+            OR COALESCE(plan_end_date, plan_date, '') >= ?1 OR COALESCE(due_date, '') >= ?1)))`,
+  )
+    .bind(from, cutoff, userId)
+    .all();
+  return c.json({ tasks: rows(results), cursor, reset: true });
+});
+
+/** Older items for a calendar range outside the device's working set (e.g. last year's months). */
+app.get('/api/tasks/range', async (c) => {
+  const from = c.req.query('from') ?? '';
+  const to = c.req.query('to') ?? '';
+  if (!from || !to || !isDate(from) || !isDate(to) || to < from) return c.json({ error: 'bad range' }, 400);
+  const { results } = await c.env.DB.prepare(
+    `SELECT ${TASK_COLS} FROM tasks WHERE user_id = ?3 AND deleted = 0 AND (
+       (plan_date IS NOT NULL AND plan_date <= ?2 AND COALESCE(plan_end_date, plan_date) >= ?1)
+       OR (due_date IS NOT NULL AND due_date BETWEEN ?1 AND ?2))`,
+  )
+    .bind(from, to, c.get('user').id)
+    .all();
+  return c.json(rows(results));
 });
 
 type TaskIn = {
@@ -188,58 +243,131 @@ type TaskIn = {
 const isDate = (v: unknown) => v == null || (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v));
 const isTime = (v: unknown) => v == null || (typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v));
 
-// Batch upsert with last-write-wins on updated_at. Lets the local-first client push its queue in one request.
+/** Returns an error message, or null when the task is acceptable. */
+function invalid(t: TaskIn): string | null {
+  if (typeof t.id !== 'string' || !t.id || t.id.length > 64) return 'bad id';
+  if (typeof t.title !== 'string' || t.title.length > 2000) return 'bad title';
+  if (!STATUSES.includes(t.status as any)) return 'bad status';
+  if (t.note != null && (typeof t.note !== 'string' || t.note.length > 20000)) return 'bad note';
+  if (!isDate(t.due_date) || !isDate(t.plan_date) || !isDate(t.plan_end_date)) return 'bad date';
+  if (t.plan_end_date && (!t.plan_date || t.plan_end_date < t.plan_date)) return 'bad range';
+  if (!isTime(t.due_time) || !isTime(t.plan_start) || !isTime(t.plan_end)) return 'bad time';
+  if (t.kind != null && t.kind !== 'task' && t.kind !== 'event') return 'bad kind';
+  return null;
+}
+
+/** Last-write-wins upsert (client updated_at), stamped with the server clock for incremental sync. */
+function upsert(db: D1Database, userId: string, t: TaskIn, now: number) {
+  return db
+    .prepare(
+      `INSERT INTO tasks (id, user_id, title, status, created_at, updated_at, deleted,
+         note, due_date, due_time, plan_date, plan_start, plan_end, kind, plan_end_date, synced_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status,
+         updated_at = excluded.updated_at, deleted = excluded.deleted, note = excluded.note,
+         due_date = excluded.due_date, due_time = excluded.due_time,
+         plan_date = excluded.plan_date, plan_start = excluded.plan_start, plan_end = excluded.plan_end,
+         kind = excluded.kind, plan_end_date = excluded.plan_end_date, synced_at = excluded.synced_at
+       WHERE tasks.user_id = excluded.user_id AND excluded.updated_at > tasks.updated_at`,
+    )
+    .bind(
+      t.id,
+      userId,
+      t.title.trim(),
+      t.status,
+      Math.floor(Number(t.created_at)) || now,
+      Math.floor(Number(t.updated_at)) || now,
+      t.deleted ? 1 : 0,
+      t.note ?? '',
+      t.due_date ?? null,
+      t.due_date ? (t.due_time ?? null) : null,
+      t.plan_date ?? null,
+      t.plan_date ? (t.plan_start ?? null) : null,
+      t.plan_date ? (t.plan_end ?? null) : null,
+      t.kind ?? 'task',
+      // a range that ends on its start day is just a single day
+      t.plan_date && t.plan_end_date && t.plan_end_date > t.plan_date ? t.plan_end_date : null,
+      now,
+    );
+}
+
+// Batch upsert. Lets the local-first client push its queue in one request.
 app.post('/api/tasks/sync', async (c) => {
   const body = (await c.req.json()) as { tasks: TaskIn[] };
   const userId = c.get('user').id;
   const tasks = (body.tasks ?? []).slice(0, 500);
   for (const t of tasks) {
-    if (typeof t.id !== 'string' || t.id.length > 64) return c.json({ error: 'bad id' }, 400);
-    if (typeof t.title !== 'string' || t.title.length > 2000) return c.json({ error: 'bad title' }, 400);
-    if (!STATUSES.includes(t.status as any)) return c.json({ error: 'bad status' }, 400);
-    if (t.note != null && (typeof t.note !== 'string' || t.note.length > 20000)) return c.json({ error: 'bad note' }, 400);
-    if (!isDate(t.due_date) || !isDate(t.plan_date) || !isDate(t.plan_end_date)) return c.json({ error: 'bad date' }, 400);
-    if (t.plan_end_date && (!t.plan_date || t.plan_end_date < t.plan_date)) return c.json({ error: 'bad range' }, 400);
-    if (!isTime(t.due_time) || !isTime(t.plan_start) || !isTime(t.plan_end)) return c.json({ error: 'bad time' }, 400);
-    if (t.kind != null && t.kind !== 'task' && t.kind !== 'event') return c.json({ error: 'bad kind' }, 400);
+    const err = invalid(t);
+    if (err) return c.json({ error: err }, 400);
   }
-  if (tasks.length) {
-    await c.env.DB.batch(
-      tasks.map((t) =>
-        c.env.DB.prepare(
-          `INSERT INTO tasks (id, user_id, title, status, created_at, updated_at, deleted,
-             note, due_date, due_time, plan_date, plan_start, plan_end, kind, plan_end_date)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status,
-             updated_at = excluded.updated_at, deleted = excluded.deleted, note = excluded.note,
-             due_date = excluded.due_date, due_time = excluded.due_time,
-             plan_date = excluded.plan_date, plan_start = excluded.plan_start, plan_end = excluded.plan_end,
-             kind = excluded.kind, plan_end_date = excluded.plan_end_date
-           WHERE tasks.user_id = excluded.user_id AND excluded.updated_at > tasks.updated_at`,
-        ).bind(
-          t.id,
-          userId,
-          t.title.trim(),
-          t.status,
-          Math.floor(Number(t.created_at)) || Date.now(),
-          Math.floor(Number(t.updated_at)) || Date.now(),
-          t.deleted ? 1 : 0,
-          t.note ?? '',
-          t.due_date ?? null,
-          t.due_date ? (t.due_time ?? null) : null,
-          t.plan_date ?? null,
-          t.plan_date ? (t.plan_start ?? null) : null,
-          t.plan_date ? (t.plan_end ?? null) : null,
-          t.kind ?? 'task',
-          // a range that ends on its start day is just a single day
-          t.plan_date && t.plan_end_date && t.plan_end_date > t.plan_date ? t.plan_end_date : null,
-        ),
-      ),
-    );
+  const now = Date.now();
+  const results = tasks.length ? await c.env.DB.batch(tasks.map((t) => upsert(c.env.DB, userId, t, now))) : [];
+  // rows the server kept its own (newer) version of: send that version back so the device converges
+  const rejected = tasks.filter((_, i) => !results[i]?.meta.changes).map((t) => t.id);
+  let stale: unknown[] = [];
+  if (rejected.length) {
+    const { results: current } = await c.env.DB.prepare(
+      `SELECT ${TASK_COLS} FROM tasks WHERE user_id = ? AND id IN (${rejected.map(() => '?').join(',')})`,
+    )
+      .bind(userId, ...rejected)
+      .all();
+    stale = rows(current);
   }
   // tell the user's other open devices to pull (fire-and-forget; the save already succeeded)
-  if (tasks.length) c.executionCtx.waitUntil(hub(c).changed(c.req.header('x-client-id') ?? '').catch(() => 0));
-  return c.json({ ok: true, count: tasks.length });
+  if (tasks.length > rejected.length) c.executionCtx.waitUntil(hub(c).changed(c.req.header('x-client-id') ?? '').catch(() => 0));
+  return c.json({ ok: true, count: tasks.length, stale });
+});
+
+// ---------- backup ----------
+
+/** Everything the account has (not deleted), as one JSON file. */
+app.get('/api/export', async (c) => {
+  const user = c.get('user');
+  const { results } = await c.env.DB.prepare(`SELECT ${TASK_COLS} FROM tasks WHERE user_id = ? AND deleted = 0 ORDER BY created_at`)
+    .bind(user.id)
+    .all();
+  const stamp = new Date().toISOString().slice(0, 10).replaceAll('-', '');
+  c.header('content-disposition', `attachment; filename="flick-backup-${stamp}.json"`);
+  return c.json({ app: 'flick', version: 1, exported_at: new Date().toISOString(), account: user.email, tasks: rows(results) });
+});
+
+/**
+ * Restore a backup into the signed-in account. Rows whose id already belongs to ANOTHER account
+ * (e.g. moving data from last year's 幹部 account) get a fresh id; the rest merge last-write-wins.
+ */
+app.post('/api/import', async (c) => {
+  const body = (await c.req.json().catch(() => null)) as { app?: string; tasks?: TaskIn[] } | null;
+  if (!body || body.app !== 'flick' || !Array.isArray(body.tasks)) return c.json({ error: 'not a Flick backup' }, 400);
+  const tasks = body.tasks.slice(0, 20000).filter((t) => !t.deleted);
+  for (const t of tasks) {
+    const err = invalid(t);
+    if (err) return c.json({ error: `${err}: ${String(t.title ?? '').slice(0, 40)}` }, 400);
+  }
+  const userId = c.get('user').id;
+  const db = c.env.DB;
+  // which ids exist, and for whom
+  const owners = new Map<string, string>();
+  for (let i = 0; i < tasks.length; i += 90) {
+    const ids = tasks.slice(i, i + 90).map((t) => t.id);
+    const { results } = await db
+      .prepare(`SELECT id, user_id FROM tasks WHERE id IN (${ids.map(() => '?').join(',')})`)
+      .bind(...ids)
+      .all<{ id: string; user_id: string }>();
+    for (const r of results) owners.set(r.id, r.user_id);
+  }
+  let added = 0;
+  let merged = 0;
+  const now = Date.now();
+  const stmts = tasks.map((t) => {
+    const owner = owners.get(t.id);
+    if (owner && owner !== userId) (t = { ...t, id: crypto.randomUUID() }), added++;
+    else if (owner) merged++;
+    else added++;
+    return upsert(db, userId, t, now);
+  });
+  for (let i = 0; i < stmts.length; i += 200) await db.batch(stmts.slice(i, i + 200));
+  if (stmts.length) c.executionCtx.waitUntil(hub(c).changed('').catch(() => 0));
+  return c.json({ ok: true, added, merged });
 });
 
 // Workers AI: turn a free-form memo into a list of concrete tasks, picking up deadlines ("金曜までに", "明日17時締切").
@@ -423,4 +551,16 @@ app.get(`/${SITE_VERIFICATION}`, (c) => c.html(`google-site-verification: ${SITE
 
 app.all('/api/*', (c) => c.json({ error: 'not found' }, 404));
 
-export default app;
+/** Daily housekeeping: purge deletions older than the tombstone TTL and expired sessions. */
+async function cleanup(env: Env) {
+  const now = Date.now();
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM tasks WHERE deleted = 1 AND synced_at < ?').bind(now - TOMBSTONE_TTL_MS),
+    env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(Math.floor(now / 1000)),
+  ]);
+}
+
+export default {
+  fetch: app.fetch,
+  scheduled: (_event: ScheduledController, env: Env, ctx: ExecutionContext) => ctx.waitUntil(cleanup(env)),
+} satisfies ExportedHandler<Env>;

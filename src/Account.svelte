@@ -3,7 +3,23 @@
   import { backOut } from 'svelte/easing';
   import { store } from './lib/store.svelte';
 
+  import { toasts } from './lib/toast.svelte';
+
   let open = $state(false);
+  let fileEl = $state<HTMLInputElement>();
+
+  async function onImport() {
+    const file = fileEl?.files?.[0];
+    if (!file) return;
+    try {
+      const r = await store.importBackup(file);
+      toasts.show(`読み込みました（追加 ${r.added}件・更新 ${r.merged}件）`);
+    } catch (e) {
+      toasts.show((e as Error).message);
+    } finally {
+      if (fileEl) fileEl.value = '';
+    }
+  }
   const initial = $derived((store.user?.name || store.user?.email || '?').slice(0, 1).toUpperCase());
 </script>
 
@@ -34,9 +50,12 @@
             <strong>{store.user.name ?? ''}</strong>
             <span>{store.user.email}</span>
           </div>
+          <button role="menuitem" class="plain" onclick={() => store.exportBackup()} data-testid="export">データを書き出す</button>
+          <button role="menuitem" class="plain" onclick={(e) => (e.stopPropagation(), fileEl?.click())} data-testid="import">データを読み込む</button>
           <button role="menuitem" onclick={() => store.logout()} data-testid="logout">ログアウト</button>
         </div>
       {/if}
+      <input bind:this={fileEl} type="file" accept="application/json,.json" hidden onchange={onImport} data-testid="import-file" />
     </div>
   {:else}
     <a class="login glass" href="/auth/google" in:scale|global={{ start: 0.6, duration: 450, easing: backOut }} data-testid="login">

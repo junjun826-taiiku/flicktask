@@ -4,6 +4,10 @@ import { store } from './store.svelte';
 import { clientId } from './client-id';
 
 const PING_MS = 25_000;
+/** No pong this long after a ping = the socket died silently; reconnect. */
+const PONG_TIMEOUT_MS = 10_000;
+/** Safety net while the app is open, in case a notification was ever missed. */
+const SAFETY_PULL_MS = 60_000;
 const MAX_BACKOFF_MS = 30_000;
 
 class Live {
@@ -14,6 +18,8 @@ class Live {
   #retryTimer: ReturnType<typeof setTimeout> | undefined;
   #ping: ReturnType<typeof setInterval> | undefined;
   #pullTimer: ReturnType<typeof setTimeout> | undefined;
+  #pongTimer: ReturnType<typeof setTimeout> | undefined;
+  #safety: ReturnType<typeof setInterval> | undefined;
 
   constructor() {
     // phones suspend background tabs: reconnect and catch up as soon as we're visible again
@@ -32,11 +38,13 @@ class Live {
     if (this.#wanted) return;
     this.#wanted = true;
     this.#connect();
+    this.#safety = setInterval(() => document.visibilityState === 'visible' && this.#schedulePull(0), SAFETY_PULL_MS);
   }
 
   stop() {
     this.#wanted = false;
     clearTimeout(this.#retryTimer);
+    clearInterval(this.#safety);
     this.#teardown();
     this.status = 'off';
   }
@@ -50,11 +58,21 @@ class Live {
     ws.onopen = () => {
       this.status = 'on';
       this.#retry = 0;
-      this.#ping = setInterval(() => ws.readyState === WebSocket.OPEN && ws.send('ping'), PING_MS);
+      this.#ping = setInterval(() => {
+        if (ws.readyState !== WebSocket.OPEN) return;
+        ws.send('ping');
+        clearTimeout(this.#pongTimer);
+        // dead socket: its close handshake may never finish, so drop it and reconnect right away
+        this.#pongTimer = setTimeout(() => {
+          this.#teardown();
+          this.status = 'off';
+          this.#connect();
+        }, PONG_TIMEOUT_MS);
+      }, PING_MS);
       this.#schedulePull(0); // catch up on anything missed while disconnected
     };
     ws.onmessage = (e) => {
-      if (e.data === 'pong') return;
+      if (e.data === 'pong') return void clearTimeout(this.#pongTimer);
       try {
         if (JSON.parse(e.data).type === 'changed') this.#schedulePull(120);
       } catch {}
@@ -71,6 +89,7 @@ class Live {
 
   #teardown() {
     clearInterval(this.#ping);
+    clearTimeout(this.#pongTimer);
     const ws = this.#ws;
     this.#ws = null;
     if (ws && ws.readyState <= WebSocket.OPEN) {

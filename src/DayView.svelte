@@ -18,6 +18,7 @@
   const dues = $derived(timedDeadlines(store.tasks, date));
   const top = $derived(allDay(store.tasks, date));
   const isToday = $derived(date === today());
+  $effect(() => void store.loadRange(date, date)); // older days come from the server on demand
   let now = $state(nowMin());
   let scroller = $state<HTMLDivElement>();
 

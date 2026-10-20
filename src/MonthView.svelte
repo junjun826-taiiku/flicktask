@@ -10,6 +10,8 @@
   let { month }: { month: string } = $props();
 
   const days = $derived(monthGrid(month));
+  // months older than the device's working set are fetched on demand
+  $effect(() => void store.loadRange(days[0], days[days.length - 1]));
   const t = $derived(today());
   // how many items fit in a cell: measured from the row height so phones show 2 and desktops more
   let viewportH = $state(600);

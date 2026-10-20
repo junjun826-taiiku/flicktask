@@ -48,6 +48,28 @@ export const STATUS_LABEL: Record<Status, string> = { todo: '未着手', doing: 
 
 const TASKS_KEY = 'ft.tasks.v1';
 const DIRTY_KEY = 'ft.dirty.v1';
+const CURSOR_KEY = 'ft.cursor.v1';
+
+/** The device keeps a working set, not the whole history: unfinished work plus roughly the last 60 days. */
+const WINDOW_DAYS = 60;
+/** Deleted items stay on the device briefly so 元に戻す still works, then disappear. */
+const TOMBSTONE_KEEP_MS = 10 * 60 * 1000;
+const windowFrom = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - WINDOW_DAYS);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+/** Same rule as the server's working-set query, plus recent tombstones. */
+function inWindow(t: Task, from = windowFrom(), now = Date.now()) {
+  if (t.deleted) return t.updated_at > now - TOMBSTONE_KEEP_MS;
+  if (t.kind === 'event') return (t.plan_end_date ?? t.plan_date ?? '9999-12-31') >= from;
+  return (
+    t.status !== 'done' ||
+    t.updated_at >= now - WINDOW_DAYS * 86_400_000 ||
+    (t.plan_end_date ?? t.plan_date ?? '') >= from ||
+    (t.due_date ?? '') >= from
+  );
+}
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -87,10 +109,23 @@ class Store {
   /** Which half of the home screen is showing on phones (both show side by side on wide screens). */
   pane = $state<'tasks' | 'schedule'>('tasks');
 
+  /** Server sync position for this account: { user, cursor }. */
+  #cursor = load<{ user: string; cursor: number } | null>(CURSOR_KEY, null);
+  #loadedRanges = new Set<string>();
+
   #persist() {
+    const from = windowFrom();
+    const now = Date.now();
+    // forget expired tombstones in memory too (they're already synced)
+    if (this.tasks.some((t) => t.deleted && !this.dirty.has(t.id) && !inWindow(t, from, now)))
+      this.tasks = this.tasks.filter((t) => !(t.deleted && !this.dirty.has(t.id) && !inWindow(t, from, now)));
     try {
-      localStorage.setItem(TASKS_KEY, JSON.stringify(this.tasks));
+      // only the working set (and anything not yet synced) is stored on the device
+      const keep = this.tasks.filter((t) => this.dirty.has(t.id) || inWindow(t, from, now));
+      localStorage.setItem(TASKS_KEY, JSON.stringify(keep));
       localStorage.setItem(DIRTY_KEY, JSON.stringify([...this.dirty]));
+      if (this.#cursor) localStorage.setItem(CURSOR_KEY, JSON.stringify(this.#cursor));
+      else localStorage.removeItem(CURSOR_KEY);
     } catch {}
   }
 
@@ -176,11 +211,14 @@ class Store {
       });
       if (res.status === 401) return this.#signedOut();
       if (!res.ok) throw new Error(String(res.status));
+      const body = (await res.json().catch(() => ({}))) as { stale?: any[] };
       // Only clear ids whose version we actually sent.
       for (const t of payload) {
         const cur = this.tasks.find((x) => x.id === t.id);
         if (!cur || cur.updated_at === t.updated_at) this.dirty.delete(t.id);
       }
+      // the server already had a newer version of these (edited elsewhere meanwhile): take it
+      if (body.stale?.length) this.#merge(body.stale.map(normalize));
       this.#persist();
     } catch {
       setTimeout(() => this.scheduleSync(0), 3000);
@@ -207,30 +245,73 @@ class Store {
     return this.#pulling;
   }
 
+  /**
+   * Incremental: ask for what changed since our cursor. First time (or after a long absence) the server
+   * sends a fresh working set with reset=true, and anything we hold that it didn't mention is dropped.
+   */
   async #pullOnce() {
+    if (!this.user) return;
+    const mine = this.#cursor?.user === this.user.id ? this.#cursor.cursor : 0;
+    const url = mine
+      ? `/api/tasks/changes?since=${mine}`
+      : `/api/tasks/changes?from=${windowFrom()}&cutoff=${Date.now() - WINDOW_DAYS * 86_400_000}`;
     let res: Response;
     try {
-      res = await fetch('/api/tasks');
+      res = await fetch(url);
     } catch {
       return; // offline
     }
     if (res.status === 401) return this.#signedOut();
     if (!res.ok) return;
-    const remote = ((await res.json()) as any[]).map(normalize);
+    const body = (await res.json()) as { tasks: any[]; cursor: number; reset: boolean };
+    const remote = body.tasks.map(normalize);
+    this.#merge(remote, true);
+    if (body.reset) {
+      const seen = new Set(remote.map((r) => r.id));
+      const from = windowFrom();
+      // gone from the server (or no longer in the working set): drop, unless we have unsynced edits
+      this.tasks = this.tasks.filter((t) => seen.has(t.id) || this.dirty.has(t.id) || !inWindow(t, from));
+    }
+    this.#cursor = { user: this.user.id, cursor: body.cursor };
+    this.#persist();
+  }
+
+  /**
+   * Last-write-wins merge of server rows; never overwrites unsynced local edits.
+   * workingSetOnly: don't bring in items outside the device's working set (sync); calendar ranges pass false.
+   */
+  #merge(remote: Task[], workingSetOnly = false) {
+    const from = windowFrom();
     const byId = new Map(this.tasks.map((t) => [t.id, t]));
-    let changed = false;
+    const drop = new Set<string>();
     for (const r of remote) {
       const local = byId.get(r.id);
-      if (!local) {
-        this.tasks.push(r);
-        changed = true;
-      } else if (!this.dirty.has(r.id) && r.updated_at > local.updated_at) {
+      if (local && this.dirty.has(r.id)) continue;
+      if (r.deleted) {
+        if (local) drop.add(r.id);
+      } else if (!local) {
+        if (!workingSetOnly || inWindow(r, from)) this.tasks.push(r);
+      } else if (r.updated_at > local.updated_at) {
         // update in place so open cards/sheets keep their identity
         Object.assign(local, r);
-        changed = true;
       }
     }
-    if (changed) this.#persist();
+    if (drop.size) this.tasks = this.tasks.filter((t) => !drop.has(t.id));
+  }
+
+  /** Calendar months older than the working set are fetched when viewed (not stored on the device). */
+  async loadRange(from: string, to: string) {
+    // a range that starts inside the working set is already on the device
+    if (!this.user || from >= windowFrom()) return;
+    const key = `${from}~${to}`;
+    if (this.#loadedRanges.has(key)) return;
+    this.#loadedRanges.add(key);
+    try {
+      const res = await fetch(`/api/tasks/range?from=${from}&to=${to}`);
+      if (res.ok) this.#merge(((await res.json()) as any[]).map(normalize));
+    } catch {
+      this.#loadedRanges.delete(key);
+    }
   }
 
   async init() {
@@ -263,7 +344,30 @@ class Store {
     this.user = null;
     this.tasks = [];
     this.dirty.clear();
+    this.#cursor = null;
+    this.#loadedRanges.clear();
     this.#persist();
+  }
+
+  /** Download everything the account has as a JSON backup (handled by the browser as a file). */
+  exportBackup() {
+    location.href = '/api/export';
+  }
+
+  /** Restore a backup file into this account. Returns how many were added / merged. */
+  async importBackup(file: File): Promise<{ added: number; merged: number }> {
+    let data: unknown;
+    try {
+      data = JSON.parse(await file.text());
+    } catch {
+      throw new Error('ファイルを読み込めませんでした');
+    }
+    await this.push(); // don't let a restore race our own unsynced edits
+    const res = await fetch('/api/import', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data) });
+    const body = (await res.json().catch(() => ({}))) as { added?: number; merged?: number; error?: string };
+    if (!res.ok) throw new Error(body.error === 'not a Flick backup' ? 'Flickのバックアップファイルではありません' : '読み込みに失敗しました');
+    await this.pull();
+    return { added: body.added ?? 0, merged: body.merged ?? 0 };
   }
 
   /** AI split. Sends the local date so "明日" / "金曜" resolve in the user's time zone. */
