@@ -206,3 +206,25 @@
 .lv-block.short span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 /* 当日モード: toasts sit above the bottom bar instead of covering its buttons */
 body:has(.lv-bar) .toasts { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 66px); }
+
+/* 当日モード in the new design's dark look (entered from /next with the dark theme) */
+.live.dark { --ink: #ededed; --ink-2: #a3a3a3; --ink-3: #737373; color: #ededed; background: #0a0a0a; }
+.live.dark .lv-icon, .live.dark .lv-also, .live.dark .lv-next, .live.dark .lv-now.idle, .live.dark .lv-bar button,
+.live.dark .sum-stats > div, .live.dark .sum-left, .live.dark .sum-note textarea, .live.dark .ds-scope label, .live.dark .ds-preview {
+  color: #ededed; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+.live.dark .lv-now { background: #1c1c1c; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
+.live.dark .lv-flow { background: rgba(255, 255, 255, 0.04); }
+.live.dark .lv-board-scroll, .live.dark .lv-corner, .live.dark .lv-gutter, .live.dark .lv-lanes-head { background: #121212; }
+.live.dark .lv-lanes-head span:not(.lv-corner) { background: color-mix(in srgb, var(--c) 22%, #121212); color: color-mix(in srgb, var(--c) 70%, #fff); }
+.live.dark .lv-block:not(.band) { color: #ededed; background: color-mix(in srgb, var(--c) 26%, #121212); box-shadow: 0 0 0 2px #121212; }
+.live.dark .lv-block[data-state='done'] { color: #8be0b8; background: #143326; }
+.live.dark .lv-block[data-state='now'] { background: #1c1c1c; }
+.live.dark .lv-block[data-state='over'] { color: #ff8b7c; background: rgba(255, 90, 60, 0.12); }
+.live.dark .lv-hour { border-color: rgba(255, 255, 255, 0.08); }
+.live.dark .band-head { color: #ededed; background: #2a2a2a; box-shadow: 0 0 0 2px #121212; }
+.live.dark .lv-bar .primary, .live.dark .ds-actions .primary, .live.dark .lv-days button.on { color: #0a0a0a; background: #ededed; }
+.live.dark .lv-preview { color: #f0c36a; background: rgba(240, 160, 32, 0.12); }
+.live.dark .lv-delay-sheet { color: #ededed; background: rgba(22, 22, 22, 0.97); }
+.live.dark .lv-check { box-shadow: inset 0 0 0 2px #5a5a5a; }
+body:has(.live.dark) { background: #0a0a0a; }
+body:has(.live.dark) .ambient { display: none; }

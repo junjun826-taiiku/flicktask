@@ -17,6 +17,7 @@
     <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
     <span class="nx-num">Flick</span>
   </a>
+  <button class="new-phone nx-chip" onclick={() => (nav.editing = "new")} aria-label="新しいイベント" data-testid="nx-new-event-phone">＋ 新規</button>
   <div class="cal-wrap" class:open={nav.calOpen}><MiniCal /></div>
   <div class="head-row"><span class="nx-label head">イベント</span><button class="new nx-chip" onclick={() => (nav.editing = "new")} data-testid="nx-new-event">＋ 新規</button></div>
   <nav class="events" data-testid="nx-events">
@@ -50,6 +51,7 @@
 </aside>
 
 <style>
+  .new-phone { display: none; }
   .brand { display: flex; align-items: center; gap: 10px; padding: 4px 6px 2px; font-size: 17px; font-weight: 700; }
   .logo { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--accent); }
   .logo svg { width: 16px; height: 16px; fill: none; stroke: #fff; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
@@ -78,7 +80,9 @@
     /* phone: the event list becomes a row of chips */
     .events { flex-direction: row; overflow-x: auto; margin: 0 -16px; padding: 0 16px 2px; scrollbar-width: none; }
     .event { flex: none; width: 210px; }
-    .head-row .head { visibility: hidden; }
+    .head-row { display: none; }
+    .nx-side { position: relative; }
+    .new-phone { display: inline-flex; align-items: center; position: absolute; top: 2px; right: 0; height: 32px; padding: 0 12px; border-radius: 10px; font-size: 12.5px; font-weight: 700; color: var(--sub); }
     .days small { display: none; }
     .cal-wrap { display: none; }
     .cal-wrap.open { display: block; }

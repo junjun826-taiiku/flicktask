@@ -3,7 +3,7 @@
   import { countdown, rangeLabel, today as todayFn } from '../../lib/dates';
   import { progress } from '../../lib/eventView';
   import { aimDate, dayDiff } from '../home';
-  import { nav } from '../nav.svelte';
+  import { nav, rememberReturn } from '../nav.svelte';
   import { prepOf } from './prep';
   import PrepTab from './PrepTab.svelte';
   import DayTab from './DayTab.svelte';
@@ -73,7 +73,7 @@
           <span class="bar"><i style="width:{p.total ? (p.done / p.total) * 100 : 0}%; background:{COLOR_HEX[e.color]}"></i></span>
         </div>
         <button class="btn nx-chip" onclick={() => (nav.editing = e.id)} data-testid="nx-event-edit">編集</button>
-        <a class="btn primary" href="/events/{e.id}/live" data-testid="nx-live-start">
+        <a class="btn primary" href="/events/{e.id}/live" onclick={rememberReturn} data-testid="nx-live-start">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z" /></svg>当日モード
         </a>
       {/if}

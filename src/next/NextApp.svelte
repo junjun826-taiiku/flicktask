@@ -14,6 +14,7 @@
   import Upcoming from './Upcoming.svelte';
   import EventPage from './event/EventPage.svelte';
   import EventEditor from './event/EventEditor.svelte';
+  import MonthPage from './MonthPage.svelte';
 
   $effect(() => {
     if (store.user) live.start();
@@ -38,7 +39,7 @@
     <Sidebar />
 
     <main class="nx-main">
-      <header class="head">
+      <header class="head" class:on-event={nav.route.name === "event"}>
         <div class="today">
           <span class="nx-label">今日</span>
           <h1>{todayLabel}</h1>
@@ -62,6 +63,8 @@
           <div class="week-col"><WeekTasks /></div>
           <div class="up-col"><Upcoming /></div>
         </div>
+      {:else if nav.route.name === "calendar"}
+        <MonthPage month={nav.route.month} day={nav.route.day} />
       {:else}
         {#key nav.route.id}<EventPage id={nav.route.id} tab={nav.route.tab} />{/key}
       {/if}
@@ -101,6 +104,8 @@
   .toast button { height: 30px; padding: 0 12px; border-radius: 9px; font-size: 12.5px; font-weight: 800; background: var(--chip); }
   @media (max-width: 760px) {
     .today h1 { font-size: 20px; }
+    .head.on-event .today { visibility: hidden; height: 0; }
+    .head.on-event { margin-bottom: -6px; }
     .cal-toggle { display: inline-flex; padding: 0 11px; }
     .btn .label { display: none; }
     .btn:has(.label) { padding: 0 11px; }

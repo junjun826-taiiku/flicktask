@@ -138,7 +138,7 @@ test.describe('メモ', () => {
 test.describe('イベントの編集', () => {
   test('create an event from the sidebar; it opens', async ({ page }) => {
     await page.goto('/next');
-    await page.getByTestId('nx-new-event').click();
+    await page.locator('[data-testid^="nx-new-event"]:visible').click(); // next to the logo on phones
     const ed = page.getByTestId('nx-editor');
     await ed.getByTestId('nx-editor-name').fill('新人戦');
     await ed.getByTestId('nx-editor-start').fill(plus(20));

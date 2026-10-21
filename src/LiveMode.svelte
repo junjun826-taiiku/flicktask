@@ -10,6 +10,31 @@
   import { addDays, fromMin, nowMin, rangeLabel, today, toMin } from './lib/dates';
   import { vibrate } from './lib/motion';
   import Icon from './Icon.svelte';
+
+  // Entered from the new design (/next): leave back to it, and follow its dark / light setting.
+  const RETURN_KEY = 'ft.liveReturn';
+  const returnTo = (() => {
+    try {
+      return sessionStorage.getItem(RETURN_KEY);
+    } catch {
+      return null;
+    }
+  })();
+  const dark = (() => {
+    try {
+      return !!returnTo && localStorage.getItem('ft.theme.v1') !== 'light';
+    } catch {
+      return false;
+    }
+  })();
+  function leave() {
+    if (returnTo) {
+      try {
+        sessionStorage.removeItem(RETURN_KEY);
+      } catch {}
+      location.assign(returnTo);
+    } else router.back();
+  }
   import { addDelay, columnize, dayRows, eventDays, getDelay, getRoles, inMinutes, itemsList, liveDay, mine, setRoles, situation, type LiveRoles, type Row } from './lib/liveMode';
 
   let { id }: { id: string } = $props();
@@ -193,7 +218,7 @@
     if (!e) return;
     if (!isLiveDay) {
       // a preview (rehearsal before the day) only leaves; nothing is closed or written
-      router.back();
+      leave();
       return;
     }
     const isLast = day >= e.end_date;
@@ -205,23 +230,23 @@
     store.updateEvent(e.id, patch);
     vibrate(16);
     toasts.show(isLast ? 'おつかれさまでした。イベントを終了しました' : `${dayNo}日目を終了しました`);
-    if (isLast) router.home();
-    else router.back();
+    if (isLast) (returnTo ? leave() : router.home());
+    else leave();
   }
 </script>
 
 <svelte:window onkeydown={(ev) => ev.key === 'Escape' && delayOpen && (delayOpen = false)} />
 
 {#if !e}
-  <div class="live" data-testid="live">
-    <header class="live-head"><button class="lv-icon" onclick={() => router.back()} aria-label="閉じる"><Icon name="x" size={20} /></button></header>
+  <div class="live" class:dark data-testid="live">
+    <header class="live-head"><button class="lv-icon" onclick={() => leave()} aria-label="閉じる"><Icon name="x" size={20} /></button></header>
     <p class="lv-empty">このイベントは見つかりません</p>
   </div>
 {:else if picking}
   <!-- 担当 pick: remembered on this device -->
   <div class="live pick" data-testid="live-pick" in:fade={{ duration: 200 }}>
     <header class="live-head">
-      <button class="lv-icon dark" onclick={() => (who ? (picking = false) : router.back())} aria-label="閉じる" data-testid="live-close"><Icon name="x" size={20} /></button>
+      <button class="lv-icon dark" onclick={() => (who ? (picking = false) : leave())} aria-label="閉じる" data-testid="live-close"><Icon name="x" size={20} /></button>
       <span class="lv-sub">{e.name}{days.length > 1 ? `・${days.indexOf(day) + 1}日目` : ''}</span>
     </header>
     <h1 class="pick-title">この端末の担当は？</h1>
@@ -251,10 +276,10 @@
     </button>
   </div>
 {:else}
-  <div class="live" data-testid="live" data-view={view}>
+  <div class="live" class:dark data-testid="live" data-view={view}>
     {#if view === 'now'}
       <header class="live-head">
-        <button class="lv-icon" onclick={() => router.back()} aria-label="当日モードを閉じる" data-testid="live-exit"><Icon name="x" size={20} /></button>
+        <button class="lv-icon" onclick={() => leave()} aria-label="当日モードを閉じる" data-testid="live-exit"><Icon name="x" size={20} /></button>
         <button class="lv-role" style="--c:{who?.roles[0] ? roleColor(who.roles[0]) : '#14161c'}" onclick={() => ((pickDraft = who?.roles ?? []), (picking = true))} data-testid="live-role">
           <span>{whoLabel}</span><Icon name="down" size={14} />
         </button>
@@ -347,7 +372,7 @@
       </nav>
     {:else if view === 'all'}
       <header class="live-head">
-        <button class="lv-icon" onclick={() => (who?.hq ? router.back() : (view = 'now'))} aria-label="戻る" data-testid="live-all-back"><Icon name="back" size={20} /></button>
+        <button class="lv-icon" onclick={() => (who?.hq ? leave() : (view = 'now'))} aria-label="戻る" data-testid="live-all-back"><Icon name="back" size={20} /></button>
         <span class="lv-title">全体</span>
         <span class="lv-sub">{who?.hq ? '本部' : ''}</span>
         <span class="lv-clock">{hhmm(clock)}</span>

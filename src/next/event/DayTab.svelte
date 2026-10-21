@@ -7,6 +7,7 @@
   import { dayItems, forRole, nextSlot, parseTable } from './day';
   import DayBoard from './DayBoard.svelte';
   import DayPanel from './DayPanel.svelte';
+  import { rememberReturn } from '../nav.svelte';
 
   let { event }: { event: FEvent } = $props();
   const days = $derived(eventDays(event));
@@ -65,7 +66,7 @@
       <button class:on={view === 'board'} aria-pressed={view === 'board'} onclick={() => setView('board')} data-testid="nx-day-board">担当別ボード</button>
     </div>
     <span class="count">{all.length}件・{event.roles.length}の担当</span>
-    <a class="btn nx-chip" href="/events/{event.id}/live" data-testid="nx-day-preview">
+    <a class="btn nx-chip" href="/events/{event.id}/live" onclick={rememberReturn} data-testid="nx-day-preview">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z" /></svg>当日モードでプレビュー
     </a>
   </div>
@@ -101,8 +102,8 @@
                 {/if}
               {/if}
             </span>
-            <span class="sub">{t.place || '—'}</span>
-            <span class="sub">{t.items || '—'}</span>
+            <span class="sub" class:none={!t.place}>{t.place || '—'}</span>
+            <span class="sub items" class:none={!t.items}>{t.items || '—'}</span>
           </button>
         {/each}
         {#if rows.length === 0}<p class="empty">この日の動きはまだありません</p>{/if}
@@ -169,6 +170,15 @@
   .sub { font-size: 12.5px; color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .empty { margin: 12px 8px; font-size: 13px; color: var(--muted); }
   .foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-top: 12px; }
+  @media (max-width: 760px) {
+    .table { min-width: 0; }
+    .th { display: none; }
+    .tr { grid-template-columns: 86px minmax(0, 1fr); row-gap: 4px; padding: 10px 6px; }
+    .who, .sub { grid-column: 2; }
+    .sub.none, .who:empty { display: none; }
+    .sub.items::before { content: '持ち物：'; }
+    .count { display: none; }
+  }
   .paste { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
   .paste textarea { width: 100%; min-height: 110px; resize: vertical; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--chip); color: var(--text); font: 500 13px/1.6 var(--font); outline: 0; tab-size: 12; }
   .pacts { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }

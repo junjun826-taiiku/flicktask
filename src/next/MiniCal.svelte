@@ -21,7 +21,7 @@
     {#each days as d, i (d)}
       {@const mark = marks.get(d)}
       <a
-        href="/calendar/{d}"
+        href="/next/calendar?m={month}&d={d}"
         class="day"
         class:out={d.slice(0, 7) !== month.slice(0, 7)}
         class:today={d === today}
@@ -35,7 +35,7 @@
       </a>
     {/each}
   </div>
-  <a class="open" href="/calendar?m={month}">月表示を開く</a>
+  <a class="open" href="/next/calendar?m={month}" data-testid="nx-open-month">月表示を開く</a>
 </section>
 
 <style>
