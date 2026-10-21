@@ -15,7 +15,7 @@
 
 <aside class="nx-side" aria-label="イベント">
   <a class="brand" href="/">
-    <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+    <img class="logo" src="/icon.svg" alt="" />
     <span class="nx-num">Flick</span>
   </a>
   <button class="new-phone nx-chip" onclick={() => (nav.editing = "new")} aria-label="新しいイベント" data-testid="nx-new-event-phone">＋ 新規</button>
@@ -64,8 +64,7 @@
 <style>
   .new-phone { display: none; }
   .brand { display: flex; align-items: center; gap: 10px; padding: 4px 6px 2px; font-size: 17px; font-weight: 700; }
-  .logo { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--accent); }
-  .logo svg { width: 16px; height: 16px; fill: none; stroke: #fff; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+  .logo { width: 32px; height: 32px; display: block; }
   .head-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 0; }
   .new { height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; font-weight: 700; color: var(--sub); }
   .events { display: flex; flex-direction: column; gap: 8px; }

@@ -10,7 +10,7 @@
   --track: rgba(255, 255, 255, 0.09);
   --line: rgba(255, 255, 255, 0.09);
   /* the sidebar: one step lighter than the page, with a hairline edge */
-  --side: #121212;
+  --side: #1c1c1c;
   --side-edge: rgba(255, 255, 255, 0.09);
   --week: rgba(255, 255, 255, 0.05);
   --ring: #151515;
@@ -45,7 +45,7 @@
   --on-accent: #ffffff;
   --track: rgba(0, 0, 0, 0.08);
   --line: rgba(0, 0, 0, 0.08);
-  --side: #fafafa;
+  --side: #ffffff;
   --side-edge: rgba(0, 0, 0, 0.09);
   --week: rgba(0, 0, 0, 0.05);
   --ring: #fbfbfb;
@@ -83,7 +83,8 @@ body.nx-body.light { background: #f2f2f2; }
 /* PC: the sidebar is one full-height panel on the left that stays put (and scrolls on its own); the page scrolls beside it */
 .nx-shell { --side-w: 300px; }
 .nx-side { position: fixed; top: 0; bottom: 0; left: 0; z-index: 20; width: var(--side-w); padding: 22px 16px 24px; overflow-y: auto; overscroll-behavior: contain;
-  display: flex; flex-direction: column; gap: 14px; background: var(--side); border-right: 1px solid var(--side-edge); scrollbar-width: thin; }
+  display: flex; flex-direction: column; gap: 14px; background: var(--side); border-right: 1px solid var(--side-edge); scrollbar-width: none; }
+.nx-side::-webkit-scrollbar { display: none; }
 .nx-main { margin-left: var(--side-w); min-width: 0; max-width: 1400px; padding: 22px 28px 40px; display: flex; flex-direction: column; gap: 18px; }
 @media (max-width: 760px) {
   /* phone: the sidebar sits on top as before */
