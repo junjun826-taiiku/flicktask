@@ -55,8 +55,8 @@ test('memo field is focused on first paint behind a full-screen skeleton', async
   await expect(memo(page)).toBeFocused();
   release();
   await ready(page);
-  await expect(skeleton).toHaveCSS('opacity', '0');
-  await expect(skeleton).toHaveCSS('pointer-events', 'none');
+  // it fades out, then is removed so its shimmer stops costing frames
+  await expect(skeleton).toHaveCount(0);
   await expect(memo(page)).toBeFocused();
 });
 

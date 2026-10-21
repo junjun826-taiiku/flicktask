@@ -156,6 +156,19 @@ function load<T>(key: string, fallback: T): T {
   }
 }
 
+/** Task order: by date (期限, else やる日), earliest on top, then time; undated ones last, newest first. */
+const dateKey = (t: Task) => {
+  const d = t.due_date ?? t.plan_date;
+  return d ? `${d} ${t.due_date ? (t.due_time ?? '99:99') : (t.plan_start ?? '99:99')}` : null;
+};
+function byDate(a: Task, b: Task) {
+  const ka = dateKey(a);
+  const kb = dateKey(b);
+  if (ka && kb) return ka < kb ? -1 : ka > kb ? 1 : b.created_at - a.created_at;
+  if (ka || kb) return ka ? -1 : 1;
+  return b.created_at - a.created_at;
+}
+
 class Store {
   tasks = $state<Task[]>(load<any[]>(TASKS_KEY, []).map(normalize));
   events = $state<FEvent[]>(load<any[]>(EVENTS_KEY, []).map(normalizeEvent));
@@ -181,7 +194,7 @@ class Store {
   visible = $derived(
     this.tasks
       .filter((t) => !t.deleted && t.kind === 'task' && this.#inScope(t) && (this.filter === 'all' || t.status === this.filter))
-      .sort((a, b) => b.created_at - a.created_at),
+      .sort(byDate),
   );
   counts = $derived.by(() => {
     const c = { all: 0, todo: 0, doing: 0, done: 0 };

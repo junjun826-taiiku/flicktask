@@ -40,7 +40,11 @@
     composer.adopt();
     requestAnimationFrame(() => {
       document.body.classList.add('ready');
-      setTimeout(() => (firstPaintDone = true), 500);
+      setTimeout(() => {
+        firstPaintDone = true;
+        // the faded-out skeleton would keep its shimmer animating forever: drop it
+        document.getElementById('boot')?.remove();
+      }, 500);
     });
   });
 </script>

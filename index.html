@@ -27,15 +27,12 @@
       html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink); font-family: var(--font); }
       body { overflow-x: hidden; }
       .ambient { position: fixed; inset: -20vmax; z-index: 0; pointer-events: none; overflow: hidden; }
-      .ambient i { position: absolute; width: 60vmax; height: 60vmax; border-radius: 50%; filter: blur(70px); opacity: 0.55; animation: drift 26s ease-in-out infinite alternate; }
-      .ambient i:nth-child(1) { background: #bfd6ff; left: 5%; top: 0; }
-      .ambient i:nth-child(2) { background: #ffd6ec; right: 0; top: 25%; animation-duration: 32s; animation-delay: -8s; }
-      .ambient i:nth-child(3) { background: #c8f5e4; left: 25%; bottom: -5%; animation-duration: 38s; animation-delay: -16s; }
-      @keyframes drift {
-        0% { transform: translate3d(0, 0, 0) scale(1); }
-        50% { transform: translate3d(8vmax, -6vmax, 0) scale(1.12); }
-        100% { transform: translate3d(-6vmax, 5vmax, 0) scale(0.94); }
-      }
+      /* soft colour wash behind the glass. Kept still: a moving backdrop makes every blurred glass surface
+         re-render on every frame, which keeps the GPU (and the fans) busy even while nothing changes */
+      .ambient i { position: absolute; width: 60vmax; height: 60vmax; border-radius: 50%; opacity: 0.55; }
+      .ambient i:nth-child(1) { background: radial-gradient(closest-side, #bfd6ff, rgba(191, 214, 255, 0)); left: 5%; top: 0; }
+      .ambient i:nth-child(2) { background: radial-gradient(closest-side, #ffd6ec, rgba(255, 214, 236, 0)); right: 0; top: 25%; }
+      .ambient i:nth-child(3) { background: radial-gradient(closest-side, #c8f5e4, rgba(200, 245, 228, 0)); left: 25%; bottom: -5%; }
       .shell { position: relative; z-index: 1; max-width: 640px; margin: 0 auto; padding: max(16px, env(safe-area-inset-top)) 16px 120px; }
       .glass { position: relative; background: var(--glass); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow);
         -webkit-backdrop-filter: blur(24px) saturate(185%); backdrop-filter: blur(24px) saturate(185%); border-radius: var(--radius); }

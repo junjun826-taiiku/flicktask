@@ -134,7 +134,8 @@ button:disabled { cursor: default; }
 .reveal-icon svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 
 .card { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 12px 14px 12px 12px; user-select: none; -webkit-user-select: none; cursor: grab;
-  transition: transform 0.5s var(--spring), box-shadow 0.3s, background 0.4s; will-change: transform; outline-offset: 3px; overflow: hidden; }
+  transition: transform 0.5s var(--spring), box-shadow 0.3s, background 0.4s; outline-offset: 3px; overflow: hidden; }
+.card.dragging, .card.flying { will-change: transform; }
 .card.dragging { transition: none; cursor: grabbing; box-shadow: var(--glass-shadow), 0 18px 40px -12px rgba(40, 52, 90, 0.28); }
 .card.flying { transition: transform 0.23s cubic-bezier(0.5, 0, 0.9, 0.5); }
 .card.instant { transition: none; }
@@ -186,3 +187,8 @@ button:disabled { cursor: default; }
 .toast button:hover { background: rgba(255, 255, 255, 0.26); }
 .toast button:active { transform: scale(0.92); }
 .toast::after { display: none; }
+
+/* long lists: cards are near-opaque white instead of blurring what is behind them (dozens of live blurs are costly) */
+.list .glass, .tgroup.glass, .tg-day { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.list .card.glass { background: rgba(255, 255, 255, 0.86); }
+.tgroup.glass { background: rgba(255, 255, 255, 0.55); }
