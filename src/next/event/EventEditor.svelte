@@ -75,7 +75,7 @@
     if (isNew) {
       const e = store.createEvent({ ...details, note: '', closed: false, tags: [] });
       nav.editing = null;
-      nav.go(`/next/events/${e.id}`);
+      nav.go(`/events/${e.id}`);
       toasts.show('イベントを作成しました');
     } else if (src) {
       propagate(src, ms, rs);
@@ -94,7 +94,7 @@
     const eid = src.id;
     store.removeEvent(eid);
     nav.editing = null;
-    nav.go('/next');
+    nav.go('/');
     toasts.show('イベントを削除しました（タスクは「その他」に残ります）', { label: '元に戻す', run: () => store.restoreEvent(eid) });
   }
   const close = () => (nav.editing = null);

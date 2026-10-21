@@ -3,114 +3,45 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
-    <meta name="theme-color" content="#f5f7fb" />
+    <meta name="theme-color" content="#0a0a0a" />
     <title>Flick</title>
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icon-180.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <script>
-      // The new design at /next paints its own background instead of the current app's memo skeleton.
-      if (location.pathname === '/next' || location.pathname.indexOf('/next/') === 0) {
-        var h = document.documentElement;
-        h.className += ' nx-boot';
-        try { if (localStorage.getItem('ft.theme.v1') === 'light') h.className += ' nx-light'; } catch (e) {}
-      }
+      // Paint the chosen theme on the very first frame (dark unless light was picked on this device).
+      try { if (localStorage.getItem('ft.theme.v1') === 'light') document.documentElement.className = 'light'; } catch (e) {}
     </script>
-    <!-- Critical CSS inlined so the memo field and skeleton paint on the very first frame, before any JS. -->
+    <!-- Critical CSS: the background and a full-screen skeleton of the layout paint before any JS. -->
     <style>
-      html.nx-boot #boot, html.nx-boot .ambient { display: none; }
-      html.nx-boot, html.nx-boot body { background: #0a0a0a; }
-      html.nx-boot.nx-light, html.nx-boot.nx-light body { background: #f2f2f2; }
-      :root {
-        --bg: #f5f7fb;
-        --ink: #14161c;
-        --ink-2: #5b6170;
-        --ink-3: #9aa0ad;
-        --glass: linear-gradient(140deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.42));
-        --glass-border: rgba(255, 255, 255, 0.85);
-        --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 1px rgba(255, 255, 255, 0.35),
-          0 10px 30px -8px rgba(40, 52, 90, 0.14), 0 1px 2px rgba(20, 22, 28, 0.05);
-        --radius: 22px;
-        --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN',
-          'Noto Sans JP', 'Yu Gothic UI', 'Segoe UI', sans-serif;
-      }
-      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-      html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink); font-family: var(--font); }
-      body { overflow-x: hidden; }
-      .ambient { position: fixed; inset: -20vmax; z-index: 0; pointer-events: none; overflow: hidden; }
-      /* soft colour wash behind the glass. Kept still: a moving backdrop makes every blurred glass surface
-         re-render on every frame, which keeps the GPU (and the fans) busy even while nothing changes */
-      .ambient i { position: absolute; width: 60vmax; height: 60vmax; border-radius: 50%; opacity: 0.55; }
-      .ambient i:nth-child(1) { background: radial-gradient(closest-side, #bfd6ff, rgba(191, 214, 255, 0)); left: 5%; top: 0; }
-      .ambient i:nth-child(2) { background: radial-gradient(closest-side, #ffd6ec, rgba(255, 214, 236, 0)); right: 0; top: 25%; }
-      .ambient i:nth-child(3) { background: radial-gradient(closest-side, #c8f5e4, rgba(200, 245, 228, 0)); left: 25%; bottom: -5%; }
-      .shell { position: relative; z-index: 1; max-width: 640px; margin: 0 auto; padding: max(16px, env(safe-area-inset-top)) 16px 120px; }
-      .glass { position: relative; background: var(--glass); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow);
-        -webkit-backdrop-filter: blur(24px) saturate(185%); backdrop-filter: blur(24px) saturate(185%); border-radius: var(--radius); }
-      .topbar { display: flex; align-items: center; justify-content: space-between; height: 44px; margin-bottom: 12px; }
-      .composer { padding: 14px 16px 12px; }
-      .memo { display: block; width: 100%; min-height: 76px; max-height: 40vh; resize: none; border: 0; outline: 0; background: transparent;
-        font: 500 18px/1.55 var(--font); color: var(--ink); caret-color: #3b6cff; padding: 0; }
-      .memo::placeholder { color: var(--ink-3); }
-      /* skeleton */
-      .sk { background: linear-gradient(100deg, rgba(220, 225, 236, 0.7) 30%, rgba(255, 255, 255, 0.95) 50%, rgba(220, 225, 236, 0.7) 70%);
-        background-size: 300% 100%; animation: shimmer 1.4s ease-in-out infinite; border-radius: 999px; }
+      html, body { margin: 0; min-height: 100%; background: #0a0a0a; }
+      html.light, html.light body { background: #f2f2f2; }
+      #boot { position: fixed; inset: 0; z-index: 50; display: flex; gap: 20px; max-width: 1480px; margin: 0 auto; padding: 22px 24px; box-sizing: border-box; transition: opacity 0.35s ease; }
+      #boot .col { display: flex; flex-direction: column; gap: 14px; }
+      #boot .side { width: 300px; flex: none; }
+      #boot .main { flex: 1; min-width: 0; }
+      #boot .sk { border-radius: 18px; background: linear-gradient(100deg, rgba(255, 255, 255, 0.04) 30%, rgba(255, 255, 255, 0.09) 50%, rgba(255, 255, 255, 0.04) 70%);
+        background-size: 300% 100%; animation: shimmer 1.4s ease-in-out infinite; }
+      html.light #boot .sk { background-image: linear-gradient(100deg, rgba(0, 0, 0, 0.04) 30%, rgba(0, 0, 0, 0.08) 50%, rgba(0, 0, 0, 0.04) 70%); }
       @keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
-      #boot { position: fixed; inset: 0; z-index: 50; overflow: hidden; transition: opacity 0.45s ease, filter 0.45s ease; }
-      #boot .sk-card { height: 64px; margin-top: 10px; display: flex; align-items: center; gap: 14px; padding: 0 18px; }
-      #boot .sk-card:nth-child(2) { animation-delay: 0.05s; }
-      body.ready #boot { opacity: 0; filter: blur(6px); pointer-events: none; }
-      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+      @media (max-width: 760px) { #boot { flex-direction: column; padding: 16px; } #boot .side { width: auto; } #boot .side .tall { display: none; } }
+      @media (prefers-reduced-motion: reduce) { #boot .sk { animation: none; } }
     </style>
   </head>
   <body>
-    <div class="ambient" aria-hidden="true"><i></i><i></i><i></i></div>
-
-    <!-- Full-screen skeleton. The memo field inside it is real and focused on first paint; the app adopts it on mount. -->
-    <div id="boot" data-testid="boot-skeleton">
-      <div class="shell">
-        <div class="topbar">
-          <div class="sk" style="width: 120px; height: 18px"></div>
-          <div class="sk" style="width: 36px; height: 36px"></div>
-        </div>
-        <div class="glass composer" id="boot-composer">
-          <textarea id="boot-memo" class="memo" placeholder="メモ" autofocus enterkeyhint="done" aria-label="メモ"></textarea>
-          <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px">
-            <div class="sk" style="width: 36px; height: 36px"></div>
-            <div class="sk" style="width: 36px; height: 36px"></div>
-          </div>
-        </div>
-        <div class="glass" style="height: 44px; margin: 18px 0 8px; border-radius: 999px; padding: 6px">
-          <div class="sk" style="width: 25%; height: 100%"></div>
-        </div>
-        <div class="glass sk-card"><div class="sk" style="width: 26px; height: 26px"></div><div class="sk" style="width: 62%; height: 14px"></div></div>
-        <div class="glass sk-card"><div class="sk" style="width: 26px; height: 26px"></div><div class="sk" style="width: 44%; height: 14px"></div></div>
-        <div class="glass sk-card"><div class="sk" style="width: 26px; height: 26px"></div><div class="sk" style="width: 70%; height: 14px"></div></div>
-        <div class="glass sk-card"><div class="sk" style="width: 26px; height: 26px"></div><div class="sk" style="width: 38%; height: 14px"></div></div>
-        <div class="glass sk-card"><div class="sk" style="width: 26px; height: 26px"></div><div class="sk" style="width: 55%; height: 14px"></div></div>
-        <div class="glass sk-card"><div class="sk" style="width: 26px; height: 26px"></div><div class="sk" style="width: 48%; height: 14px"></div></div>
+    <div id="boot" data-testid="boot-skeleton" aria-hidden="true">
+      <div class="col side">
+        <div class="sk" style="height: 34px; width: 120px"></div>
+        <div class="sk tall" style="height: 300px"></div>
+        <div class="sk" style="height: 92px"></div>
+        <div class="sk" style="height: 92px"></div>
+      </div>
+      <div class="col main">
+        <div class="sk" style="height: 52px; width: 260px"></div>
+        <div class="sk" style="height: 280px"></div>
+        <div class="sk" style="height: 320px"></div>
       </div>
     </div>
-    <script>
-      // Runs before the bundle: keep focus, and queue memos submitted before the app has loaded.
-      (function () {
-        var m = document.getElementById('boot-memo');
-        m.focus();
-        m.addEventListener('keydown', function (e) {
-          if (window.__ftAdopted || e.key !== 'Enter' || e.shiftKey || e.isComposing || e.keyCode === 229) return;
-          e.preventDefault();
-          var v = m.value.trim();
-          if (!v) return;
-          try {
-            var q = JSON.parse(localStorage.getItem('ft.bootQueue') || '[]');
-            q.push({ text: v, at: Date.now() });
-            localStorage.setItem('ft.bootQueue', JSON.stringify(q));
-          } catch (_) {}
-          m.value = '';
-        });
-        window.__ftBootReady = true;
-      })();
-    </script>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

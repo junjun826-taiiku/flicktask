@@ -36,7 +36,7 @@
         <i class="now" style="left:{pct(tl.today)}"><span>今日</span></i>
       </div>
       {#each tl.rows as r (r.event.id)}
-        <a class="row" href="/next/events/{r.event.id}" data-testid="nx-tl-row">
+        <a class="row" href="/events/{r.event.id}" data-testid="nx-tl-row">
           <span class="name"><i style="background:{r.color}"></i>{r.event.name}</span>
           <span class="track">
             <i class="line" style="left:{pct(tl.today)}; width:calc({pct(r.start)} - {pct(tl.today)}); background:{r.color}"></i>

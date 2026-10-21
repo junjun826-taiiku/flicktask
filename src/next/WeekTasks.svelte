@@ -68,7 +68,7 @@
       {#each groups as g (g.key)}
         {@const color = g.event ? COLOR_HEX[g.event.color] : 'var(--muted)'}
         <div class="group" style="--c:{color}" data-testid="nx-week-group">
-          <a class="ghead" href="/next/events/{g.event?.id ?? 'other'}">
+          <a class="ghead" href="/events/{g.event?.id ?? 'other'}">
             <span style="color:{color}">{g.event?.name ?? 'その他'}</span>
             {#if g.event}<small>本番まで {Math.max(0, daysUntil(g.event.start_date))}日</small>{/if}
           </a>

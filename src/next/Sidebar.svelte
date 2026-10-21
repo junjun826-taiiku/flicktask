@@ -6,14 +6,15 @@
   import MiniCal from './MiniCal.svelte';
 
   const running = $derived(store.activeEvents);
-  const finished = $derived(store.liveEvents.filter((e) => e.closed).length);
+  const finished = $derived(store.liveEvents.filter((e) => e.closed).sort((a, b) => b.start_date.localeCompare(a.start_date)));
+  let showFinished = $state(false);
   /** tasks that belong to no event live under 「その他」 */
   const otherCount = $derived(store.tasks.filter((t) => !t.deleted && t.kind === 'task' && t.status !== 'done' && !store.eventById(t.event_id)).length);
   const current = $derived(nav.route.name === 'event' ? nav.route.id : null);
 </script>
 
 <aside class="nx-side" aria-label="イベント">
-  <a class="brand" href="/next">
+  <a class="brand" href="/">
     <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
     <span class="nx-num">Flick</span>
   </a>
@@ -24,7 +25,7 @@
     {#each running as e (e.id)}
       {@const c = countdown(e.start_date, e.end_date)}
       {@const p = progress(store.tasks, e)}
-      <a class="event" class:on={current === e.id} href="/next/events/{e.id}" aria-current={current === e.id ? 'page' : undefined} data-testid="nx-event">
+      <a class="event" class:on={current === e.id} href="/events/{e.id}" aria-current={current === e.id ? 'page' : undefined} data-testid="nx-event">
         <span class="top">
           <span class="name"><i style="background:{COLOR_HEX[e.color]}"></i>{e.name}</span>
           <span class="days">
@@ -42,12 +43,22 @@
         </span>
       </a>
     {/each}
-    <a class="event other" class:on={current === 'other'} href="/next/events/other" data-testid="nx-other">
+    <a class="event other" class:on={current === 'other'} href="/events/other" data-testid="nx-other">
       <span class="top"><span class="name"><i></i>その他</span><span class="days"><b class="nx-num">{otherCount}</b><em>件</em></span></span>
       <span class="when">イベントに入っていないタスク</span>
     </a>
   </nav>
-  {#if finished}<a class="finished" href="/events">終了したイベント　{finished}</a>{/if}
+  {#if finished.length}
+    <button class="finished" onclick={() => (showFinished = !showFinished)} aria-expanded={showFinished} data-testid="nx-finished">終了したイベント　{finished.length}</button>
+    {#if showFinished}
+      <nav class="done-list">
+        {#each finished as e (e.id)}
+          <a class="done-ev" class:on={current === e.id} href="/events/{e.id}" data-testid="nx-finished-event"><i style="background:{COLOR_HEX[e.color]}"></i>{e.name}<small>{rangeLabel(e.start_date, e.end_date)}</small></a>
+        {/each}
+      </nav>
+    {/if}
+  {/if}
+  <footer class="legal" data-testid="legal-links"><a href="/privacy">プライバシーポリシー</a><a href="/terms">利用規約</a></footer>
 </aside>
 
 <style>
@@ -75,7 +86,15 @@
   .bar { flex: 1; height: 4px; border-radius: 2px; overflow: hidden; background: var(--track); }
   .bar i { display: block; height: 100%; border-radius: 2px; }
   .count { font-size: 11px; font-weight: 700; color: var(--sub); }
-  .finished { padding: 6px; font-size: 12px; font-weight: 700; color: var(--muted); }
+  .legal { display: flex; gap: 14px; padding: 10px 6px 0; font-size: 11.5px; }
+  .legal a { color: var(--muted); }
+  .legal a:hover { color: var(--sub); }
+  .finished { align-self: flex-start; padding: 6px; font-size: 12px; font-weight: 700; color: var(--muted); }
+  .done-list { display: flex; flex-direction: column; gap: 4px; }
+  .done-ev { display: flex; align-items: center; gap: 7px; padding: 8px 10px; border-radius: 10px; font-size: 13px; font-weight: 700; color: var(--sub); }
+  .done-ev:hover, .done-ev.on { background: var(--hi); color: var(--text); }
+  .done-ev i { flex: none; width: 7px; height: 7px; border-radius: 50%; }
+  .done-ev small { margin-left: auto; font-size: 11px; font-weight: 500; color: var(--muted); }
   @media (max-width: 760px) {
     /* phone: the event list becomes a row of chips */
     .events { flex-direction: row; overflow-x: auto; margin: 0 -16px; padding: 0 16px 2px; scrollbar-width: none; }

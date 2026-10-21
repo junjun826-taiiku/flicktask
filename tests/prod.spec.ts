@@ -1,22 +1,19 @@
 // Smoke tests against the deployed Worker: BASE_URL=https://... npx playwright test
 import { test, expect } from '@playwright/test';
 
-test('production: memo is usable instantly and works signed out', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('ft.hinted', '1'));
+test('production: a skeleton paints first, then the app works signed out', async ({ page }) => {
   await page.goto('/', { waitUntil: 'commit' });
-  await expect(page.locator('#boot-memo')).toBeFocused();
-  await expect(page.locator('body')).toHaveClass(/ready/);
-  await page.locator('#boot-memo').fill('本番テスト');
-  await page.locator('#boot-memo').press('Enter');
-  const card = page.getByTestId('task-card').filter({ hasText: '本番テスト' });
+  await expect(page.getByTestId('boot-skeleton')).toBeAttached();
+  await expect(page.getByTestId('nx-timeline')).toBeVisible();
+  await expect(page.getByTestId('boot-skeleton')).toHaveCount(0);
+  await page.goto('/events/other');
+  await page.getByTestId('nx-add').fill('本番テスト');
+  await page.getByTestId('nx-add').press('Enter');
+  const card = page.getByTestId('nx-card').filter({ hasText: '本番テスト' });
   await expect(card).toBeVisible();
-  await page.waitForTimeout(600);
-  const box = (await card.boundingBox())!;
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.down();
-  for (let i = 1; i <= 12; i++) await page.mouse.move(box.x + box.width / 2 + i * 16, box.y + box.height / 2);
-  await page.mouse.up();
-  await expect(card).toHaveAttribute('data-status', 'doing');
+  await card.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(card).toHaveAttribute('aria-label', /進行中/);
 });
 
 test('production: dev login is disabled', async ({ request }) => {

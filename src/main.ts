@@ -1,5 +1,4 @@
-// Two apps share this page while the redesign is built: the new one at /next, the current one everywhere else.
+// 当日モード (/events/:id/live) has its own small shell; everything else is the app.
 // Each loads as its own chunk with its own CSS.
-const isNext = location.pathname === '/next' || location.pathname.startsWith('/next/');
-if (isNext) import('./next/main');
-else import('./main-old');
+if (/^\/events\/[^/]+\/live\/?$/.test(location.pathname)) import('./main-live');
+else import('./next/main');

@@ -26,7 +26,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('month view: event bars across their days, deadlines and 予定 in the cells, not the timetable', async ({ page }) => {
-  await page.goto('/next/calendar?m=2026-11-01');
+  await page.goto('/calendar?m=2026-11-01');
   await expect(page.getByTestId('nx-month-title')).toHaveText('2026年11月');
   await expect(page.getByTestId('nx-month-bar').filter({ hasText: '津田沼祭' })).toHaveCount(2); // Sat 21 and again on the next week row (Sun 22)
   const cell = (d: string) => page.locator(`[data-date="${d}"]`);
@@ -40,17 +40,17 @@ test('month view: event bars across their days, deadlines and 予定 in the cell
 });
 
 test('tapping a day lists it; an item opens where it lives', async ({ page }) => {
-  await page.goto('/next/calendar?m=2026-11-01');
+  await page.goto('/calendar?m=2026-11-01');
   await page.locator('[data-date="2026-11-18"]').click();
   const panel = page.getByTestId('nx-month-day');
   await expect(panel).toContainText('11月18日');
   await panel.getByTestId('nx-month-day-item').filter({ hasText: '読み合わせ' }).click();
-  await expect(page).toHaveURL(/\/next\/events\/obog\?tab=sched$/);
+  await expect(page).toHaveURL(/\/events\/obog\?tab=sched$/);
   await expect(page.getByTestId('nx-sched')).toBeVisible();
 });
 
 test('the mini calendar opens the month view', async ({ page }) => {
-  await page.goto('/next');
+  await page.goto('/');
   await expect(page.getByTestId('nx-timeline')).toBeVisible();
   if (await page.getByTestId('nx-cal-toggle').isVisible()) await page.getByTestId('nx-cal-toggle').click();
   await page.getByTestId('nx-open-month').click();
@@ -58,13 +58,27 @@ test('the mini calendar opens the month view', async ({ page }) => {
 });
 
 test('当日モード from the new design is dark and comes back to the event', async ({ page }) => {
-  await page.goto('/next/events/obog');
+  await page.goto('/events/obog');
   await page.getByTestId('nx-live-start').click();
   await page.getByTestId('pick-hq').click();
   await expect(page.getByTestId('live')).toHaveClass(/dark/);
   await page.getByTestId('live-all-back').click();
-  await expect(page).toHaveURL(/\/next\/events\/obog$/);
-  // entered from the current app, it stays as it was
+  await expect(page).toHaveURL(/\/events\/obog$/);
+  // opened directly, × goes to the event's 当日の動き; light theme makes it light
+  await page.evaluate(() => localStorage.setItem('ft.theme.v1', 'light'));
   await page.goto('/events/obog/live');
   await expect(page.getByTestId('live')).not.toHaveClass(/dark/);
+  await page.getByTestId('live-all-back').click();
+  await expect(page).toHaveURL(/\/events\/obog\?tab=day$/);
+});
+
+test('addresses from before the redesign still land on the right screen', async ({ page }) => {
+  await page.goto('/next/events/obog?tab=memo');
+  await expect(page).toHaveURL(/\/events\/obog\?tab=memo$/);
+  await expect(page.getByTestId('nx-memo')).toBeVisible();
+  await page.goto('/calendar/2026-11-18');
+  await expect(page).toHaveURL(/\/calendar\?m=2026-11-01&d=2026-11-18$/);
+  await expect(page.getByTestId('nx-month-day')).toBeVisible();
+  await page.goto('/events');
+  await expect(page.getByTestId('nx-timeline')).toBeVisible();
 });

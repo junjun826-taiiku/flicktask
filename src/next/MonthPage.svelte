@@ -36,21 +36,21 @@
     return out;
   }
   const title = $derived(`${month.slice(0, 4)}年${Number(month.slice(5, 7))}月`);
-  const go = (m: string) => nav.go(`/next/calendar?m=${m}`);
-  const openDay = (d: string) => nav.go(`/next/calendar?m=${month}&d=${d}`);
-  const closeDay = () => nav.go(`/next/calendar?m=${month}`);
+  const go = (m: string) => nav.go(`/calendar?m=${m}`);
+  const openDay = (d: string) => nav.go(`/calendar?m=${month}&d=${d}`);
+  const closeDay = () => nav.go(`/calendar?m=${month}`);
 
   // ---------- the day list ----------
   const dayList = $derived(day ? (itemsOf.get(day) ?? monthItems(monthTasks, day, store.liveEvents)) : []);
   const kindLabel = { meet: 'イベント', event: '予定', plan: 'やる時間', due: '締切' } as const;
   function hrefOf(it: MonthItem) {
-    if (it.kind === 'meet') return `/next/events/${it.task.id.slice(5)}`;
+    if (it.kind === 'meet') return `/events/${it.task.id.slice(5)}`;
     const t = it.task as Task;
     const e = store.eventById(t.event_id);
-    if (!e) return '/next/events/other';
-    if (it.kind === 'event') return `/next/events/${e.id}?tab=sched`;
-    if (t.plan_date && t.plan_start && t.plan_date >= e.start_date && t.plan_date <= e.end_date) return `/next/events/${e.id}?tab=day`;
-    return `/next/events/${e.id}`;
+    if (!e) return '/events/other';
+    if (it.kind === 'event') return `/events/${e.id}?tab=sched`;
+    if (t.plan_date && t.plan_start && t.plan_date >= e.start_date && t.plan_date <= e.end_date) return `/events/${e.id}?tab=day`;
+    return `/events/${e.id}`;
   }
   const colorOf = (it: MonthItem) =>
     it.kind === 'meet' ? it.color! : it.kind === 'event' ? (it.task.tag ? tagColor(it.task.tag) : 'var(--event)') : it.kind === 'due' ? 'var(--over)' : 'var(--accent)';
@@ -122,7 +122,6 @@
         </a>
       {/each}
     {/if}
-    <a class="old" href="/calendar/{day}">時間割で見る（ドラッグで動かす）</a>
   </aside>
 {/if}
 

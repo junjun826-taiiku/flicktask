@@ -45,7 +45,7 @@
 {#if !isOther && !e}
   <section class="nx-panel missing" data-testid="nx-event-missing">
     <h1>このイベントは見つかりません</h1>
-    <a href="/next">ホームに戻る</a>
+    <a href="/">ホームに戻る</a>
   </section>
 {:else}
   <section class="nx-panel head" data-testid="nx-event-head">
@@ -94,7 +94,7 @@
   {#if !isOther}
     <div class="tabs" role="tablist">
       {#each TABS as t}
-        <a role="tab" class:on={current === t.key} aria-selected={current === t.key} href="/next/events/{id}{t.key === 'prep' ? '' : `?tab=${t.key}`}" data-testid="nx-tab-{t.key}">{t.label}</a>
+        <a role="tab" class:on={current === t.key} aria-selected={current === t.key} href="/events/{id}{t.key === 'prep' ? '' : `?tab=${t.key}`}" data-testid="nx-tab-{t.key}">{t.label}</a>
       {/each}
     </div>
   {/if}

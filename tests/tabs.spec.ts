@@ -40,7 +40,7 @@ const rows = (page: Page) => page.getByTestId('nx-day-row');
 
 test.describe('当日の動き', () => {
   test('the day as a table in time order (予定 marked), per day for multi-day events, filter by role', async ({ page }) => {
-    await page.goto('/next/events/ev1?tab=day');
+    await page.goto('/events/ev1?tab=day');
     await expect(rows(page)).toHaveText([/11:30.*本部員集合.*全員/, /11:45.*会場設営.*設営.*5号館/, /13:30.*受付・荷物受付/, /14:00.*OBOG総会.*予定/]);
     await page.getByTestId('nx-day-roles').getByRole('button', { name: '受付' }).click();
     await expect(rows(page)).toHaveText([/本部員集合/, /受付・荷物受付/, /OBOG総会/]); // 全員 and 予定 stay
@@ -50,7 +50,7 @@ test.describe('当日の動き', () => {
   });
 
   test('add a row and edit it in the panel: time, roles, place', async ({ page }) => {
-    await page.goto('/next/events/ev1?tab=day');
+    await page.goto('/events/ev1?tab=day');
     await page.getByTestId('nx-day-add').click();
     const panel = page.getByTestId('nx-day-panel');
     await expect(panel).toBeVisible();
@@ -67,7 +67,7 @@ test.describe('当日の動き', () => {
   });
 
   test('paste a table from Excel / the 運営マニュアル', async ({ page }) => {
-    await page.goto('/next/events/ev1?tab=day');
+    await page.goto('/events/ev1?tab=day');
     await page.getByTestId('nx-day-paste-open').click();
     await page.getByTestId('nx-day-paste').fill('時刻\tやること\t担当\t場所\n9:00-9:30\t集合\t\t正門\n9:30〜10:00\t受付準備\t受付\t5号館入口\t名簿、ペン');
     await expect(page.getByTestId('nx-day-paste-add')).toHaveText('2件追加');
@@ -78,7 +78,7 @@ test.describe('当日の動き', () => {
   });
 
   test('担当別ボード: role columns, 全員 / 予定 across the width; a block opens the panel', async ({ page }) => {
-    await page.goto('/next/events/ev1?tab=day');
+    await page.goto('/events/ev1?tab=day');
     await page.getByTestId('nx-day-board').click();
     await expect(page.getByTestId('nx-dayboard-band')).toHaveCount(2); // 本部員集合 (全員) and OBOG総会 (予定)
     await page.getByTestId('nx-dayboard-block').filter({ hasText: '会場設営' }).click();
@@ -88,7 +88,7 @@ test.describe('当日の動き', () => {
 
 test.describe('予定', () => {
   test('upcoming by date with tags (本番 for the event days), filter by tag, past folded', async ({ page }) => {
-    await page.goto('/next/events/ev1?tab=sched');
+    await page.goto('/events/ev1?tab=sched');
     const r = page.getByTestId('nx-sched-row');
     await expect(r).toHaveText([/イベント担当MTG.*MTG/, /幹部読み合わせ②.*幹部読み合わせ/, /OBOG総会.*本番/]);
     await page.getByTestId('nx-sched-filter').filter({ hasText: 'MTG' }).click();
@@ -99,7 +99,7 @@ test.describe('予定', () => {
   });
 
   test('add a 予定, pick a tag, and make a new one', async ({ page }) => {
-    await page.goto('/next/events/ev1?tab=sched');
+    await page.goto('/events/ev1?tab=sched');
     await page.getByTestId('nx-sched-add').click();
     const panel = page.getByTestId('nx-sched-panel');
     await panel.getByTestId('nx-sched-panel-title').fill('会場下見');
@@ -115,7 +115,7 @@ test.describe('予定', () => {
 
 test.describe('メモ', () => {
   test('shown formatted; checkboxes toggle; edits save themselves', async ({ page }) => {
-    await page.goto('/next/events/ev1?tab=memo');
+    await page.goto('/events/ev1?tab=memo');
     const view = page.getByTestId('nx-memo-view');
     await expect(view.locator('h3')).toHaveText('連絡事項');
     await view.getByTestId('nx-memo-check').check();
@@ -129,7 +129,7 @@ test.describe('メモ', () => {
   });
 
   test("last year's notes of the same event are shown beside it", async ({ page }) => {
-    await page.goto('/next/events/ev1?tab=memo');
+    await page.goto('/events/ev1?tab=memo');
     await expect(page.getByTestId('nx-memo-prev')).toContainText('2025 OBOG総会');
     await expect(page.getByTestId('nx-memo-prev')).toContainText('受付は2人だと足りない');
   });
@@ -137,7 +137,7 @@ test.describe('メモ', () => {
 
 test.describe('イベントの編集', () => {
   test('create an event from the sidebar; it opens', async ({ page }) => {
-    await page.goto('/next');
+    await page.goto('/');
     await page.locator('[data-testid^="nx-new-event"]:visible').click(); // next to the logo on phones
     const ed = page.getByTestId('nx-editor');
     await ed.getByTestId('nx-editor-name').fill('新人戦');
@@ -153,7 +153,7 @@ test.describe('イベントの編集', () => {
   });
 
   test('renaming or removing a person carries over to their tasks', async ({ page }) => {
-    await page.goto('/next/events/ev1');
+    await page.goto('/events/ev1');
     await page.getByTestId('nx-event-edit').click();
     const ed = page.getByTestId('nx-editor');
     await ed.getByTestId('nx-editor-member').nth(0).locator('input').fill('佐藤(陽)');
@@ -165,7 +165,7 @@ test.describe('イベントの編集', () => {
   });
 
   test('close and reopen, delete with undo', async ({ page }) => {
-    await page.goto('/next/events/ev1');
+    await page.goto('/events/ev1');
     await page.getByTestId('nx-event-edit').click();
     await page.getByTestId('nx-editor-close').click();
     await expect(page.getByTestId('nx-event').filter({ hasText: '2026 OBOG総会' })).toHaveCount(0); // finished events leave the list
@@ -174,7 +174,7 @@ test.describe('イベントの編集', () => {
     await expect(page.getByTestId('nx-event').filter({ hasText: '2026 OBOG総会' })).toBeVisible();
     await page.getByTestId('nx-event-edit').click();
     await page.getByTestId('nx-editor-delete').click();
-    await expect(page).toHaveURL(/\/next$/);
+    await expect(page).toHaveURL(/:\d+\/$|\.dev\/$/);
     await page.getByTestId('nx-toast').filter({ hasText: '削除' }).getByRole('button', { name: '元に戻す' }).click();
     await expect(page.getByTestId('nx-event').filter({ hasText: '2026 OBOG総会' })).toBeVisible();
   });

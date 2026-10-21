@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 
-// The new event screen (/next/events/:id), 準備 tab.
+// The event screen (/events/:id), 準備 tab.
 const plus = (n: number) => {
   const d = new Date();
   d.setDate(d.getDate() + n);
@@ -42,9 +42,9 @@ async function showCol(page: Page, s: string) {
 }
 
 test('the sidebar opens an event: header, countdown, progress, and 準備 in three status columns', async ({ page }) => {
-  await page.goto('/next');
+  await page.goto('/');
   await page.getByTestId('nx-event').filter({ hasText: '2026 OBOG総会' }).click();
-  await expect(page).toHaveURL(/\/next\/events\/ev1$/);
+  await expect(page).toHaveURL(/\/events\/ev1$/);
   const head = page.getByTestId('nx-event-head');
   await expect(head).toContainText('30');
   await expect(head).toContainText('1/5'); // done / all 準備 (the day-of move is not counted)
@@ -56,7 +56,7 @@ test('the sidebar opens an event: header, countdown, progress, and 準備 in thr
 });
 
 test('Enter adds one task per line into this event', async ({ page }) => {
-  await page.goto('/next/events/ev1');
+  await page.goto('/events/ev1');
   await page.getByTestId('nx-add').fill('・弁当の発注\n・名札の作成');
   await page.getByTestId('nx-add').press('Enter');
   await expect(card(page, '弁当の発注')).toBeVisible();
@@ -68,14 +68,14 @@ test('Enter adds one task per line into this event', async ({ page }) => {
 
 test('dragging a card to another column changes its status @desktop', async ({ page }, info) => {
   test.skip(info.project.name !== 'desktop', 'drag and drop is the PC gesture');
-  await page.goto('/next/events/ev1');
+  await page.goto('/events/ev1');
   await card(page, '案内状の発送').dragTo(col(page, 'doing'));
   await expect(col(page, 'doing').getByTestId('nx-card').filter({ hasText: '案内状の発送' })).toBeVisible();
   expect((await stored(page, 'b')).status).toBe('doing');
 });
 
 test('keyboard: arrow keys move a focused card, done shows an undo toast', async ({ page }) => {
-  await page.goto('/next/events/ev1');
+  await page.goto('/events/ev1');
   await showCol(page, 'doing');
   await card(page, '会場予約').focus();
   await page.keyboard.press('ArrowRight');
@@ -86,7 +86,7 @@ test('keyboard: arrow keys move a focused card, done shows an undo toast', async
 });
 
 test('the side panel edits status, deadline, people and memo; delete can be undone', async ({ page }) => {
-  await page.goto('/next/events/ev1');
+  await page.goto('/events/ev1');
   await card(page, '備品リスト').click();
   const panel = page.getByTestId('nx-panel');
   await expect(panel).toBeVisible();
@@ -111,7 +111,7 @@ test('the side panel edits status, deadline, people and memo; delete can be undo
 });
 
 test('filter by person, and 担当なし', async ({ page }) => {
-  await page.goto('/next/events/ev1');
+  await page.goto('/events/ev1');
   const who = page.getByTestId('nx-who');
   await who.getByRole('button', { name: /佐藤/ }).click();
   await showCol(page, 'todo');
@@ -123,7 +123,7 @@ test('filter by person, and 担当なし', async ({ page }) => {
 });
 
 test('担当別タイムライン: a lane per person, undated tasks below; the view is remembered', async ({ page }) => {
-  await page.goto('/next/events/ev1');
+  await page.goto('/events/ev1');
   await page.getByTestId('nx-view-timeline').click();
   const tl = page.getByTestId('nx-member-timeline');
   await expect(tl.getByTestId('nx-lane')).toHaveCount(4); // 3 people + 担当なし
@@ -138,7 +138,7 @@ test('担当別タイムライン: a lane per person, undated tasks below; the v
 });
 
 test('「その他」 holds tasks with no event; tasks added there have no event', async ({ page }) => {
-  await page.goto('/next/events/other');
+  await page.goto('/events/other');
   await expect(page.getByTestId('nx-event-title')).toHaveText('その他');
   await expect(card(page, 'イベント外のタスク')).toBeVisible();
   await expect(page.getByTestId('nx-view-timeline')).toHaveCount(0);
@@ -150,7 +150,7 @@ test('「その他」 holds tasks with no event; tasks added there have no event
 });
 
 test('tabs switch in place and keep the URL', async ({ page }) => {
-  await page.goto('/next/events/ev1');
+  await page.goto('/events/ev1');
   await page.getByTestId('nx-tab-day').click();
   await expect(page).toHaveURL(/tab=day/);
   await expect(page.getByTestId('nx-day')).toBeVisible();

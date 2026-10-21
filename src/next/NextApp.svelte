@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The new design, built at /next next to the current app until it replaces it.
+  // The app: sidebar of events + home / event / month screens.
   import { onMount } from 'svelte';
   import { flip } from 'svelte/animate';
   import { fly } from 'svelte/transition';
@@ -15,6 +15,7 @@
   import EventPage from './event/EventPage.svelte';
   import EventEditor from './event/EventEditor.svelte';
   import MonthPage from './MonthPage.svelte';
+  import AccountMenu from './AccountMenu.svelte';
 
   $effect(() => {
     if (store.user) live.start();
@@ -41,7 +42,7 @@
     <main class="nx-main">
       <header class="head" class:on-event={nav.route.name === "event"}>
         <div class="today">
-          <span class="nx-label">今日</span>
+          <span class="nx-label">今日{#if store.user}<i class="sync" class:on={store.syncing} class:off={live.status !== 'on'} title={live.status === 'on' ? 'リアルタイム同期中' : '再接続中'} data-live={live.status} data-testid="sync-dot"></i>{/if}</span>
           <h1>{todayLabel}</h1>
         </div>
         <button class="btn nx-chip cal-toggle" onclick={() => (nav.calOpen = !nav.calOpen)} aria-expanded={nav.calOpen} aria-label="カレンダー" data-testid="nx-cal-toggle">
@@ -50,11 +51,7 @@
         <button class="btn nx-chip" onclick={() => theme.toggle()} aria-label="ライトとダークを切り替える" data-testid="nx-theme">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg><span class="label">{theme.value === 'dark' ? 'ダーク' : 'ライト'}</span>
         </button>
-        {#if store.user}
-          <span class="avatar" title={store.user.email} data-testid="nx-avatar">{(store.user.name ?? store.user.email)[0]}</span>
-        {:else if store.ready}
-          <a class="btn nx-chip" href="/auth/google" data-testid="nx-login">ログイン</a>
-        {/if}
+        <AccountMenu />
       </header>
 
       {#if nav.route.name === 'home'}
@@ -92,6 +89,9 @@
   .btn { height: 38px; padding: 0 14px; border-radius: 12px; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
   .btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .cal-toggle { display: none; }
+  .sync { display: inline-block; width: 7px; height: 7px; margin-left: 8px; border-radius: 50%; background: #2fbf7f; vertical-align: middle; transition: background 0.3s; }
+  .sync.off { background: var(--muted); }
+  .sync.on { background: var(--accent); }
   .avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #fff; background: #a64bd6; }
   .lower { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
   .week-col { flex: 999 1 460px; min-width: 0; }

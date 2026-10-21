@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-// The new design lives at /next while it is being built; "/" keeps the current app.
+// Home: sidebar, これからの流れ, 今週やること, 直近の予定; theme; the data fields behind them.
 const uid = () => Math.random().toString(36).slice(2, 8);
 const plus = (n: number) => {
   const d = new Date();
@@ -29,8 +29,8 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
-test('/next shows the new shell: events in the sidebar, 「その他」 last, dark by default', async ({ page }) => {
-  await page.goto('/next');
+test('home: events in the sidebar, 「その他」 last, dark by default', async ({ page }) => {
+  await page.goto('/');
   const root = page.getByTestId('nx');
   await expect(root).toHaveAttribute('data-theme', 'dark');
   const events = page.getByTestId('nx-event');
@@ -42,18 +42,11 @@ test('/next shows the new shell: events in the sidebar, 「その他」 last, da
 });
 
 test('the theme switch flips to light and is remembered on the device', async ({ page }) => {
-  await page.goto('/next');
+  await page.goto('/');
   await page.getByTestId('nx-theme').click();
   await expect(page.getByTestId('nx')).toHaveAttribute('data-theme', 'light');
   await page.reload();
   await expect(page.getByTestId('nx')).toHaveAttribute('data-theme', 'light');
-});
-
-test('the current app at / is unchanged', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.locator('body')).toHaveClass(/ready/);
-  await expect(page.locator('#boot-memo')).toBeVisible();
-  await expect(page.getByTestId('nx')).toHaveCount(0);
 });
 
 test('the API stores イベント担当, tags, assignees and the 15 colours @local', async ({ page }) => {
@@ -101,7 +94,7 @@ test('old data without the new fields still loads, and new fields survive a sync
   const p2 = await ctx.newPage();
   await p2.goto(`/auth/dev-login?name=${name}`);
   await expect(p2.locator('body')).toHaveClass(/ready/);
-  await p2.goto('/next');
+  await p2.goto('/');
   await expect(p2.getByTestId('nx-event').filter({ hasText: '部同会' })).toBeVisible();
   const stored = await p2.evaluate((evId) => JSON.parse(localStorage.getItem('ft.events.v1') ?? '[]').find((e: { id: string }) => e.id === evId), evId);
   expect(stored.members).toEqual([{ name: '堤', color: 'brown' }]);
@@ -135,21 +128,21 @@ test.describe('new home', () => {
   });
 
   test('これからの流れ: one row per running event with its deadlines; a row opens the event', async ({ page }) => {
-    await page.goto('/next');
+    await page.goto('/');
     const rows = page.getByTestId('nx-tl-row');
     await expect(rows).toHaveCount(2);
     const obog = rows.filter({ hasText: '2026 OBOG総会' });
     // w1 is overdue (2 days ago); it is drawn red unless it falls before this week's Monday
     await expect(rows.filter({ hasText: '津田沼祭' }).getByTestId('nx-tl-due')).toHaveCount(2);
     await obog.click();
-    await expect(page).toHaveURL(/\/next\/events\/ev1$/);
+    await expect(page).toHaveURL(/\/events\/ev1$/);
     await expect(page.getByTestId('nx-event-title')).toContainText('2026 OBOG総会');
     await page.goBack();
     await expect(page.getByTestId('nx-timeline')).toBeVisible();
   });
 
   test('今週やること: grouped by event (その他 last), or one list by deadline; the choice is remembered', async ({ page }) => {
-    await page.goto('/next');
+    await page.goto('/');
     const week = page.getByTestId('nx-week');
     const groups = week.getByTestId('nx-week-group');
     await expect(groups).toHaveCount(3);
@@ -168,7 +161,7 @@ test.describe('new home', () => {
   });
 
   test('checking a task off completes it, with undo', async ({ page }) => {
-    await page.goto('/next');
+    await page.goto('/');
     const row = page.getByTestId('nx-week-row').filter({ hasText: '出店申請' });
     await row.getByTestId('nx-week-check').click();
     await expect(row).toHaveCount(0);
@@ -177,14 +170,14 @@ test.describe('new home', () => {
   });
 
   test('直近の予定 lists upcoming 予定 with their tag', async ({ page }) => {
-    await page.goto('/next');
+    await page.goto('/');
     const item = page.getByTestId('nx-upcoming-item').filter({ hasText: '幹部読み合わせ' });
     await expect(item).toContainText('19:00');
     await expect(item).toContainText('2026 OBOG総会');
   });
 
   test('mini calendar: today is marked, months page, days with deadlines get a dot', async ({ page }) => {
-    await page.goto('/next');
+    await page.goto('/');
     await expect(page.getByTestId('nx-timeline')).toBeVisible(); // the app has loaded
     if (await page.getByTestId('nx-cal-toggle').isVisible()) await page.getByTestId('nx-cal-toggle').click(); // folded on phones
     const cal = page.getByTestId('nx-minical');

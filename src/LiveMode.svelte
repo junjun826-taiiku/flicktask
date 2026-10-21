@@ -4,14 +4,14 @@
   import { flip } from 'svelte/animate';
   import { backOut, cubicOut } from 'svelte/easing';
   import { store, COLOR_HEX, type Task } from './lib/store.svelte';
-  import { router } from './lib/router.svelte';
   import { sheet } from './lib/sheet.svelte';
   import { toasts } from './lib/toast.svelte';
   import { addDays, fromMin, nowMin, rangeLabel, today, toMin } from './lib/dates';
   import { vibrate } from './lib/motion';
   import Icon from './Icon.svelte';
 
-  // Entered from the new design (/next): leave back to it, and follow its dark / light setting.
+  // Leaves back to the screen it was opened from (else the event's 当日の動き), and follows the dark / light setting.
+  let { id }: { id: string } = $props();
   const RETURN_KEY = 'ft.liveReturn';
   const returnTo = (() => {
     try {
@@ -22,7 +22,7 @@
   })();
   const dark = (() => {
     try {
-      return !!returnTo && localStorage.getItem('ft.theme.v1') !== 'light';
+      return localStorage.getItem('ft.theme.v1') !== 'light';
     } catch {
       return false;
     }
@@ -33,11 +33,10 @@
         sessionStorage.removeItem(RETURN_KEY);
       } catch {}
       location.assign(returnTo);
-    } else router.back();
+    } else location.assign(`/events/${encodeURIComponent(id)}?tab=day`);
   }
   import { addDelay, columnize, dayRows, eventDays, getDelay, getRoles, inMinutes, itemsList, liveDay, mine, setRoles, situation, type LiveRoles, type Row } from './lib/liveMode';
 
-  let { id }: { id: string } = $props();
 
   const e = $derived(store.eventById(id));
   let who = $state<LiveRoles | null>(getRoles(id));
@@ -230,7 +229,7 @@
     store.updateEvent(e.id, patch);
     vibrate(16);
     toasts.show(isLast ? 'おつかれさまでした。イベントを終了しました' : `${dayNo}日目を終了しました`);
-    if (isLast) (returnTo ? leave() : router.home());
+    if (isLast) leave();
     else leave();
   }
 </script>

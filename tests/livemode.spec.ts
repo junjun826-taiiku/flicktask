@@ -53,14 +53,12 @@ async function pick(page: Page, ...roles: string[]) {
   await page.getByTestId('pick-start').click();
 }
 
-test('on the event day the home banner opens 当日モード; いま / つぎ follow the clock', async ({ page }) => {
+test('the event screen opens 当日モード; いま / つぎ follow the clock', async ({ page }) => {
   await page.clock.install({ time: at(9, 12) });
   await seed(page);
-  await page.goto('/');
-  await ready(page);
-  const banner = page.getByTestId('live-banner');
-  await expect(banner).toContainText('本番当日');
-  await banner.click();
+  await page.goto('/events/ev1');
+  await expect(page.getByTestId('nx-event-head')).toContainText('本番当日');
+  await page.getByTestId('nx-live-start').click();
   await expect(page.getByTestId('live-pick')).toBeVisible();
   await pick(page, '受付');
 
@@ -175,26 +173,20 @@ test('end of the day: finish or hand back leftovers, save the 申し送り, clos
   await page.getByTestId('sum-note').fill('受付は2人だと足りない');
   await page.getByTestId('sum-finish').click();
 
-  // back home; the event is closed and its note kept
-  await expect(page.getByTestId('event-chip')).toHaveCount(0);
-  await expect(page.getByTestId('live-banner')).toHaveCount(0);
-  await page.goto('/events/ev1');
-  await page.getByTestId('event-edit').click();
-  await expect(page.getByTestId('event-note')).toHaveValue(/受付は2人だと足りない/);
-  await page.keyboard.press('Escape');
-  // 弁当の配布 became a prep task due tomorrow
-  await page.getByTestId('tab-prep').click();
-  await expect(page.getByTestId('event-screen').getByTestId('task-card').filter({ hasText: '弁当の配布' })).toBeVisible();
+  // back to the event: it is closed, the 申し送り is in its メモ, and 弁当の配布 became a 準備 task due tomorrow
+  await expect(page).toHaveURL(/\/events\/ev1\?tab=day$/);
+  await expect(page.getByTestId('nx-event').filter({ hasText: '秋季リーグ戦' })).toHaveCount(0);
+  await page.getByTestId('nx-tab-memo').click();
+  await expect(page.getByTestId('nx-memo-view')).toContainText('受付は2人だと足りない');
+  await page.getByTestId('nx-tab-prep').click();
+  await expect(page.getByTestId('nx-card').filter({ hasText: '弁当の配布' })).toBeVisible();
 });
 
 test('before the event, 当日モード is a preview of day one', async ({ page }) => {
   await page.clock.install({ time: at(20, 0) });
   await seed(page, { day: plus(3), start: plus(3), end: plus(3) });
-  await page.goto('/events/ev1');
-  await ready(page);
-  await expect(page.getByTestId('live-banner')).toHaveCount(0);
-  await page.getByTestId('tab-day').click();
-  await page.getByTestId('live-start').click();
+  await page.goto('/events/ev1?tab=day');
+  await page.getByTestId('nx-day-preview').click();
   await pick(page, '受付');
   await expect(page.getByTestId('live-preview')).toContainText('プレビュー');
   await expect(page.getByTestId('live-next')).toContainText('08:30');
@@ -205,14 +197,15 @@ test('before the event, 当日モード is a preview of day one', async ({ page 
   await expect(page.getByTestId('live')).toHaveCount(0);
 
   // finishing a preview only leaves: the event is not closed and no note is written
-  await page.getByTestId('live-start').click();
+  await page.getByTestId('nx-day-preview').click();
   await page.getByTestId('live-end').click();
   await page.getByTestId('sum-note').fill('プレビューのメモ');
   await expect(page.getByTestId('sum-finish')).toHaveText('プレビューを閉じる');
   await page.getByTestId('sum-finish').click();
-  await expect(page.getByTestId('event-closed')).toHaveCount(0);
-  await page.getByTestId('event-edit').click();
-  await expect(page.getByTestId('event-note')).toHaveValue('');
+  await expect(page.getByTestId('nx-event').filter({ hasText: '秋季リーグ戦' })).toBeVisible(); // still running
+  const ev = await page.evaluate(() => JSON.parse(localStorage.getItem('ft.events.v1')!).find((e: { id: string }) => e.id === 'ev1'));
+  expect(ev.closed).toBe(false);
+  expect(ev.note).toBe('');
 });
 
 test('本部 board: 全員 items span the whole board; nothing hides a title', async ({ page }) => {

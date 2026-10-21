@@ -1,29 +1,25 @@
 import { test, expect, type Page, type Browser } from '@playwright/test';
 
 const uid = () => Math.random().toString(36).slice(2, 8);
-const memo = (page: Page) => page.locator('#boot-memo');
-const card = (page: Page, text: string) => page.getByTestId('task-card').filter({ hasText: text });
+// tasks with no event live on the 「その他」 page
+const memo = (page: Page) => page.getByTestId('nx-add');
+const card = (page: Page, text: string) => page.getByTestId('nx-card').filter({ hasText: text });
 
 async function signedIn(browser: Browser, name: string) {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
   await page.addInitScript(() => localStorage.setItem('ft.hinted', '1'));
   await page.goto(`/auth/dev-login?name=${name}`);
-  await expect(page.locator('body')).toHaveClass(/ready/);
+  await page.goto('/events/other');
+  await expect(page.getByTestId('nx-prep')).toBeVisible();
   await expect(page.getByTestId('sync-dot')).toHaveAttribute('data-live', 'on'); // live socket connected
   return { ctx, page };
 }
 
+/** move a card one status to the right (未着手 → 進行中) with the keyboard */
 async function flickRight(page: Page, text: string) {
-  const c = card(page, text);
-  await page.waitForTimeout(450);
-  const box = (await c.boundingBox())!;
-  const x = box.x + box.width / 2;
-  const y = box.y + box.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  for (let i = 1; i <= 12; i++) await page.mouse.move(x + i * 16, y);
-  await page.mouse.up();
+  await card(page, text).focus();
+  await page.keyboard.press('ArrowRight');
 }
 
 test('changes on one device show up on another without reloading @local', async ({ browser }) => {
@@ -36,12 +32,12 @@ test('changes on one device show up on another without reloading @local', async 
   await expect(card(b.page, 'リアルタイム確認')).toBeVisible({ timeout: 4000 });
 
   await flickRight(a.page, 'リアルタイム確認');
-  await expect(card(b.page, 'リアルタイム確認')).toHaveAttribute('data-status', 'doing', { timeout: 4000 });
+  await expect(card(b.page, 'リアルタイム確認')).toHaveAttribute('aria-label', /進行中/, { timeout: 4000 });
 
   // and the other way round, including a delete
-  const c = card(b.page, 'リアルタイム確認');
-  await c.focus();
-  await b.page.keyboard.press('Delete');
+  if (await b.page.getByTestId('nx-col-pick-doing').isVisible()) await b.page.getByTestId('nx-col-pick-doing').click(); // phones: one column at a time
+  await card(b.page, 'リアルタイム確認').click();
+  await b.page.getByTestId('nx-panel-delete').click();
   await expect(card(a.page, 'リアルタイム確認')).toHaveCount(0, { timeout: 4000 });
 
   await a.ctx.close();

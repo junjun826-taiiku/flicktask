@@ -109,7 +109,7 @@
       <div class="bh"><h2>昨年の申し送り</h2>{#if prev}<span>{prev.name}</span>{/if}</div>
       {#if prev && prevLines.length}
         <div class="prev">{@render rendered(prevLines, false)}</div>
-        <a class="btn nx-chip" href="/next/events/{prev.id}?tab=memo">{prev.name}を開く</a>
+        <a class="btn nx-chip" href="/events/{prev.id}?tab=memo">{prev.name}を開く</a>
       {:else if prev}
         <p class="empty">{prev.name}にはメモがありません</p>
       {:else}

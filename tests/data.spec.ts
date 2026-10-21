@@ -8,13 +8,15 @@ const daysAgo = (n: number) => {
   d.setDate(d.getDate() - n);
   return ymd(d);
 };
-const memo = (page: Page) => page.locator('#boot-memo');
-const card = (page: Page, text: string) => page.getByTestId('task-card').filter({ hasText: text });
+// tasks with no event live on the 「その他」 page
+const memo = (page: Page) => page.getByTestId('nx-add');
+const card = (page: Page, text: string) => page.getByTestId('nx-card').filter({ hasText: text });
 
 async function login(page: Page, name: string) {
   await page.addInitScript(() => localStorage.setItem('ft.hinted', '1'));
   await page.goto(`/auth/dev-login?name=${name}`);
-  await expect(page.locator('body')).toHaveClass(/ready/);
+  await page.goto('/events/other');
+  await expect(page.getByTestId('nx-prep')).toBeVisible();
 }
 const base = { status: 'todo', kind: 'task', note: '', due_date: null, due_time: null, plan_date: null, plan_start: null, plan_end: null, plan_end_date: null };
 const old = Date.now() - 200 * 86_400_000;
@@ -40,7 +42,7 @@ test('the device keeps a working set; old finished items stay on the server @loc
   const p2 = await ctx.newPage();
   await login(p2, name);
   await expect(card(p2, '古いけど未完了')).toBeVisible();
-  await expect(card(p2, '最近の完了')).toBeVisible();
+  await expect(card(p2, '最近の完了')).toHaveCount(1); // in the 完了 column (folded away on phones)
   await expect(card(p2, '昔の完了タスク')).toHaveCount(0);
   const stored = await p2.evaluate(() => localStorage.getItem('ft.tasks.v1') ?? '');
   expect(stored).not.toContain('昔の完了タスク');
@@ -49,7 +51,7 @@ test('the device keeps a working set; old finished items stay on the server @loc
   // …and fetches an old month when the calendar opens it
   const d = daysAgo(200);
   await p2.goto(`/calendar?m=${d.slice(0, 7)}-01`);
-  await expect(p2.locator(`[data-date="${d}"]`).getByTestId('m-event')).toContainText('昔の予定');
+  await expect(p2.locator(`[data-date="${d}"]`)).toContainText('昔の予定');
   await ctx.close();
 });
 
@@ -68,12 +70,12 @@ test('incremental sync applies deletions from another device @local', async ({ p
   const cursor = await p2.evaluate(() => JSON.parse(localStorage.getItem('ft.cursor.v1') ?? 'null')?.cursor);
   expect(cursor).toBeGreaterThan(0);
 
-  await card(page, '消される予定のタスク').focus();
-  await page.keyboard.press('Delete');
+  await card(page, '消される予定のタスク').click();
+  await page.getByTestId('nx-panel-delete').click();
   await expect(card(p2, '消される予定のタスク')).toHaveCount(0, { timeout: 5000 });
   // and after a reload it doesn't come back
   await p2.reload();
-  await expect(p2.locator('body')).toHaveClass(/ready/);
+  await expect(p2.getByTestId('nx-prep')).toBeVisible();
   await expect(card(p2, '消される予定のタスク')).toHaveCount(0);
   await ctx.close();
 });
@@ -111,19 +113,19 @@ test('export a backup and import it into another account @local', async ({ page,
   await login(p2, `next-${uid()}`);
   await p2.getByTestId('avatar').click();
   await p2.getByTestId('import-file').setInputFiles(path!);
-  await expect(p2.getByTestId('toast').filter({ hasText: '追加 2件' })).toBeVisible();
+  await expect(p2.getByTestId('nx-toast').filter({ hasText: '追加 2件' })).toBeVisible();
   await expect(card(p2, '引き継ぐ書類')).toBeVisible();
   await expect(card(p2, '引き継ぐ連絡先')).toBeVisible();
 
   // the original account is untouched (ids were re-issued, not stolen)
   await page.reload();
-  await expect(page.locator('body')).toHaveClass(/ready/);
+  await expect(page.getByTestId('nx-prep')).toBeVisible();
   await expect(card(page, '引き継ぐ書類')).toBeVisible();
 
   // a file that isn't a backup is refused politely
   await p2.getByTestId('avatar').click();
   await p2.getByTestId('import-file').setInputFiles({ name: 'x.json', mimeType: 'application/json', buffer: Buffer.from('{"hello":1}') });
-  await expect(p2.getByTestId('toast').filter({ hasText: 'バックアップファイルではありません' })).toBeVisible();
+  await expect(p2.getByTestId('nx-toast').filter({ hasText: 'バックアップファイルではありません' })).toBeVisible();
   await ctx.close();
 });
 
