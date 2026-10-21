@@ -12,6 +12,7 @@
   import Timeline from './Timeline.svelte';
   import WeekTasks from './WeekTasks.svelte';
   import Upcoming from './Upcoming.svelte';
+  import EventPage from './event/EventPage.svelte';
 
   $effect(() => {
     if (store.user) live.start();
@@ -28,7 +29,6 @@
   });
 
   const todayLabel = new Intl.DateTimeFormat('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date());
-  const ev = $derived(nav.route.name === 'event' ? (nav.route.id === 'other' ? null : store.eventById(nav.route.id)) : null);
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
@@ -62,12 +62,7 @@
           <div class="up-col"><Upcoming /></div>
         </div>
       {:else}
-        <!-- stage 2 builds the event screen; until then the current one is a click away -->
-        <section class="nx-panel wip" data-testid="nx-event-wip">
-          <h2>{ev ? ev.name : nav.route.id === 'other' ? 'その他' : 'イベントが見つかりません'}</h2>
-          <p>新しいイベント画面は作成中です。</p>
-          {#if ev}<a class="btn nx-chip" href="/events/{ev.id}">今の画面で開く</a>{/if}
-        </section>
+        {#key nav.route.id}<EventPage id={nav.route.id} tab={nav.route.tab} />{/key}
       {/if}
     </main>
   </div>

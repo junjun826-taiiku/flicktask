@@ -143,7 +143,7 @@ test.describe('new home', () => {
     await expect(rows.filter({ hasText: '津田沼祭' }).getByTestId('nx-tl-due')).toHaveCount(2);
     await obog.click();
     await expect(page).toHaveURL(/\/next\/events\/ev1$/);
-    await expect(page.getByTestId('nx-event-wip')).toContainText('2026 OBOG総会');
+    await expect(page.getByTestId('nx-event-title')).toContainText('2026 OBOG総会');
     await page.goBack();
     await expect(page.getByTestId('nx-timeline')).toBeVisible();
   });
@@ -185,6 +185,7 @@ test.describe('new home', () => {
 
   test('mini calendar: today is marked, months page, days with deadlines get a dot', async ({ page }) => {
     await page.goto('/next');
+    await expect(page.getByTestId('nx-timeline')).toBeVisible(); // the app has loaded
     if (await page.getByTestId('nx-cal-toggle').isVisible()) await page.getByTestId('nx-cal-toggle').click(); // folded on phones
     const cal = page.getByTestId('nx-minical');
     await expect(cal).toBeVisible();
