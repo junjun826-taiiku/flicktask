@@ -49,6 +49,7 @@ test('memo field is focused on first paint behind a full-screen skeleton', async
   });
   await page.goto('/', { waitUntil: 'commit' });
   await memo(page).waitFor();
+  await page.waitForFunction(() => (window as any).__ftBootReady); // the pre-load Enter handler is attached
   const skeleton = page.getByTestId('boot-skeleton');
   await expect(skeleton).toBeVisible();
   await expect(skeleton.locator('.sk').first()).toBeVisible();
@@ -69,6 +70,7 @@ test('memos typed before the app loads are kept', async ({ page }) => {
   });
   await page.goto('/', { waitUntil: 'commit' });
   await memo(page).waitFor();
+  await page.waitForFunction(() => (window as any).__ftBootReady); // the pre-load Enter handler is attached
   await page.keyboard.type('早打ちメモ');
   await page.keyboard.press('Enter');
   await page.keyboard.type('書きかけ');

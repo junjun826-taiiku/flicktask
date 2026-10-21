@@ -28,6 +28,7 @@ test('a multi-line memo submitted before the app loads becomes separate tasks', 
   });
   await page.goto('/', { waitUntil: 'commit' });
   await memo(page).waitFor();
+  await page.waitForFunction(() => (window as any).__ftBootReady); // the pre-load Enter handler is attached
   await memo(page).fill('・はやい1\n・はやい2');
   await memo(page).press('Enter');
   release();
