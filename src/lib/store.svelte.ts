@@ -605,7 +605,7 @@ class Store {
     await this.push(); // don't let a restore race our own unsynced edits
     const res = await fetch('/api/import', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data) });
     const body = (await res.json().catch(() => ({}))) as { added?: number; merged?: number; error?: string };
-    if (!res.ok) throw new Error(body.error === 'not a Flick backup' ? 'Flickのバックアップファイルではありません' : '読み込みに失敗しました');
+    if (!res.ok) throw new Error(body.error === 'not a Flick backup' ? 'Task本部のバックアップファイルではありません' : '読み込みに失敗しました');
     await this.pull();
     return { added: body.added ?? 0, merged: body.merged ?? 0 };
   }

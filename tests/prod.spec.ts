@@ -61,4 +61,6 @@ test('app icons are served for browsers and home screens', async ({ request, pag
   expect(manifest.icons.map((i: { src: string }) => i.src)).toContain('/icon-512.png');
   await page.goto('/');
   await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href', '/icon-180.png');
+  expect(manifest.name).toBe('Task本部');
+  await expect(page).toHaveTitle('Task本部');
 });

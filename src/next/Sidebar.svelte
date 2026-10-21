@@ -16,7 +16,7 @@
 <aside class="nx-side" aria-label="イベント">
   <a class="brand" href="/">
     <img class="logo" src="/icon.svg" alt="" />
-    <span class="nx-num">Flick</span>
+    <span class="nx-num">Task本部</span>
   </a>
   <button class="new-phone nx-chip" onclick={() => (nav.editing = "new")} aria-label="新しいイベント" data-testid="nx-new-event-phone">＋ 新規</button>
   <div class="cal-wrap" class:open={nav.calOpen}><MiniCal /></div>
