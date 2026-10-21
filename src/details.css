@@ -26,6 +26,8 @@
 
 /* ---------- header calendar button ---------- */
 .top-actions { display: flex; align-items: center; gap: 10px; }
+.events-btn { height: 38px; padding: 0 14px; border-radius: 999px; font-size: 13px; font-weight: 800; white-space: nowrap; color: var(--ink); transition: transform 0.35s var(--spring); }
+.events-btn:active { transform: scale(0.94); }
 .cal-btn { position: relative; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; color: var(--ink); transition: transform 0.35s var(--spring); }
 .cal-btn:hover { transform: scale(1.06); }
 .cal-btn:active { transform: scale(0.9); }
@@ -340,4 +342,15 @@
 @media (max-width: 600px) {
   .m-item[data-span='single'] { height: auto; min-height: 16px; padding-top: 1px; padding-bottom: 1px; line-height: 12px; }
   .m-item[data-span='single'] span { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: 9.5px; }
+}
+
+/* header on narrow phones: one line, buttons keep their size */
+.topbar { gap: 8px; }
+.topbar .date { min-width: 0; white-space: nowrap; overflow: hidden; }
+.top-actions > * { flex: none; }
+@media (max-width: 400px) {
+  .top-actions { gap: 8px; }
+  .events-btn { padding: 0 12px; }
+  .login { padding: 0 10px; }
+  .login span { display: none; }
 }
