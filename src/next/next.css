@@ -1,0 +1,87 @@
+/* New design (/next): black, gray and white behind glass panels. Dark by default, light on request.
+   Everything is scoped under .nx so the current app at / is untouched. */
+.nx {
+  --bg: #0a0a0a;
+  --text: #ededed;
+  --sub: #a3a3a3;
+  --muted: #737373;
+  --accent: #8ea8ff;
+  --on-accent: #0a0a0a;
+  --track: rgba(255, 255, 255, 0.09);
+  --line: rgba(255, 255, 255, 0.09);
+  --week: rgba(255, 255, 255, 0.05);
+  --ring: #151515;
+  --panel: rgba(255, 255, 255, 0.045);
+  --border: rgba(255, 255, 255, 0.08);
+  --chip: rgba(255, 255, 255, 0.07);
+  --card: rgba(255, 255, 255, 0.035);
+  --hi: rgba(255, 255, 255, 0.1);
+  --drawer: rgba(22, 22, 22, 0.94);
+  --over: #ff6b5b;
+  --event: #2fc4b2;
+  --shadow: 0 20px 40px -24px rgba(0, 0, 0, 0.8);
+  --glow: radial-gradient(50% 40% at 10% 0%, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 70%),
+    radial-gradient(45% 40% at 100% 30%, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0) 70%);
+  --font: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic UI', 'Segoe UI', sans-serif;
+  --num: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+
+  min-height: 100vh;
+  box-sizing: border-box;
+  color: var(--text);
+  background: var(--glow), var(--bg);
+  font-family: var(--font);
+  color-scheme: dark;
+}
+.nx[data-theme='light'] {
+  --bg: #f2f2f2;
+  --text: #161616;
+  --sub: #5e5e5e;
+  --muted: #8c8c8c;
+  --accent: #3b6cff;
+  --on-accent: #ffffff;
+  --track: rgba(0, 0, 0, 0.08);
+  --line: rgba(0, 0, 0, 0.08);
+  --week: rgba(0, 0, 0, 0.05);
+  --ring: #fbfbfb;
+  --panel: rgba(255, 255, 255, 0.78);
+  --border: rgba(0, 0, 0, 0.07);
+  --chip: rgba(0, 0, 0, 0.05);
+  --card: rgba(255, 255, 255, 0.65);
+  --hi: rgba(0, 0, 0, 0.07);
+  --drawer: rgba(255, 255, 255, 0.95);
+  --shadow: 0 14px 34px -22px rgba(0, 0, 0, 0.25);
+  --glow: radial-gradient(50% 40% at 10% 0%, #ffffff 0%, rgba(255, 255, 255, 0) 70%);
+  color-scheme: light;
+}
+body.nx-body { margin: 0; background: #0a0a0a; }
+body.nx-body.light { background: #f2f2f2; }
+.nx *, .nx *::before, .nx *::after { box-sizing: border-box; }
+.nx button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.nx a { color: inherit; text-decoration: none; }
+.nx :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.nx-panel {
+  border-radius: 18px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: var(--shadow);
+}
+.nx-chip { background: var(--chip); color: var(--text); }
+.nx-label { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: var(--muted); }
+.nx-num { font-family: var(--num); }
+
+/* layout: sidebar + main; on a phone the sidebar stacks on top */
+.nx-shell { display: flex; flex-wrap: wrap; gap: 20px; max-width: 1480px; margin: 0 auto; padding: 22px 24px 40px; align-items: flex-start; }
+.nx-side { flex: 1 1 290px; max-width: 330px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.nx-main { flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+@media (max-width: 760px) {
+  .nx-shell { padding: 16px; gap: 14px; }
+  .nx-side { max-width: none; flex-basis: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nx *, .nx *::before, .nx *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+/* the current app's ambient colour wash and skeleton are not part of the new design */
+body.nx-body .ambient, body.nx-body #boot { display: none; }

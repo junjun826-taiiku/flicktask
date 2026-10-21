@@ -29,21 +29,42 @@ export type Task = {
   place: string;
   /** 持ち物, free text. */
   items: string;
+  /** 準備: names of the イベント担当 working on it. */
+  assignees: string[];
+  /** 予定: one tag (MTG / 読み合わせ / … ), '' = none. */
+  tag: string;
 };
 export type Kind = 'task' | 'event';
 
-export const COLORS = ['blue', 'orange', 'violet', 'pink', 'green', 'teal', 'gray'] as const;
+/** 15 colours shared by events, roles and people (the first 7 are the original set, so old data stays valid). */
+export const COLORS = ['blue', 'orange', 'violet', 'pink', 'green', 'teal', 'gray', 'red', 'yellow', 'brown', 'lime', 'sky', 'magenta', 'indigo', 'coral'] as const;
 export type Color = (typeof COLORS)[number];
 export const COLOR_HEX: Record<Color, string> = {
-  blue: '#5b8cff',
-  orange: '#f0a020',
-  violet: '#7a5cff',
-  pink: '#e64980',
-  green: '#2f9e44',
-  teal: '#0ea5a4',
-  gray: '#868e96',
+  blue: '#5b8def',
+  orange: '#f0a43a',
+  violet: '#8b6cf6',
+  pink: '#e8609a',
+  green: '#3cb371',
+  teal: '#2fb5aa',
+  gray: '#7a8699',
+  red: '#e5534b',
+  yellow: '#d4b106',
+  brown: '#b07a4a',
+  lime: '#7cc04a',
+  sky: '#20a4d6',
+  magenta: '#c560e0',
+  indigo: '#4f6bd8',
+  coral: '#ff8a5c',
 };
+export const COLOR_NAME: Record<Color, string> = {
+  blue: '青', orange: 'オレンジ', violet: '紫', pink: 'ピンク', green: '緑', teal: '青緑', gray: 'グレー',
+  red: '赤', yellow: '黄', brown: '茶', lime: '黄緑', sky: '水色', magenta: 'マゼンタ', indigo: '藍', coral: 'コーラル',
+};
+/** Built-in 予定 tags; an event can add its own. */
+export const BUILTIN_TAGS = ['MTG', '読み合わせ', '幹部読み合わせ'] as const;
 export type Role = { name: string; color: Color };
+/** イベント担当: a person who runs the preparation (any number per event). */
+export type Member = { name: string; color: Color };
 /** イベント = 大会・行事. (A calendar-only Task with kind 'event' is a 予定 — a different thing.) */
 export type FEvent = {
   id: string;
@@ -53,14 +74,18 @@ export type FEvent = {
   place: string;
   color: Color;
   roles: Role[];
-  /** 来年への申し送り */
+  members: Member[];
+  /** custom 予定 tags */
+  tags: string[];
+  /** メモ (連絡事項・来年への申し送り) */
   note: string;
   closed: boolean;
   created_at: number;
   updated_at: number;
   deleted: boolean;
 };
-export type EventDetails = Pick<FEvent, 'name' | 'start_date' | 'end_date' | 'place' | 'color' | 'roles' | 'note' | 'closed'>;
+export type EventDetails = Pick<FEvent, 'name' | 'start_date' | 'end_date' | 'place' | 'color' | 'roles' | 'note' | 'closed'> &
+  Partial<Pick<FEvent, 'members' | 'tags'>>;
 
 export type AiSuggestion = { title: string; due_date: string | null; due_time: string | null; recovered?: boolean };
 /** recovered: list items the model skipped, added back as-is. rest: what didn't fit under the 30-task cap. */
@@ -71,7 +96,7 @@ const localToday = () => {
 };
 export type Details = Pick<
   Task,
-  'title' | 'note' | 'due_date' | 'due_time' | 'plan_date' | 'plan_start' | 'plan_end' | 'plan_end_date' | 'status' | 'kind' | 'event_id' | 'roles' | 'place' | 'items'
+  'title' | 'note' | 'due_date' | 'due_time' | 'plan_date' | 'plan_start' | 'plan_end' | 'plan_end_date' | 'status' | 'kind' | 'event_id' | 'roles' | 'place' | 'items' | 'assignees' | 'tag'
 >;
 
 const EMPTY_DETAILS = {
@@ -87,6 +112,8 @@ const EMPTY_DETAILS = {
   roles: [] as string[],
   place: '',
   items: '',
+  assignees: [] as string[],
+  tag: '',
 };
 /** Tasks saved before newer fields existed (or coming from an older server) get them filled in. */
 const normalize = (t: any): Task => ({
@@ -98,6 +125,8 @@ const normalize = (t: any): Task => ({
   roles: Array.isArray(t.roles) ? t.roles : [],
   place: t.place ?? '',
   items: t.items ?? '',
+  assignees: Array.isArray(t.assignees) ? t.assignees : [],
+  tag: typeof t.tag === 'string' ? t.tag : '',
 });
 const normalizeEvent = (e: any): FEvent => ({
   place: '',
@@ -105,6 +134,8 @@ const normalizeEvent = (e: any): FEvent => ({
   note: '',
   ...e,
   roles: Array.isArray(e.roles) ? e.roles : [],
+  members: Array.isArray(e.members) ? e.members : [],
+  tags: Array.isArray(e.tags) ? e.tags : [],
   closed: !!e.closed,
   deleted: !!e.deleted,
 });
@@ -313,7 +344,7 @@ class Store {
   }
   createEvent(d: EventDetails) {
     const now = Date.now();
-    const e: FEvent = { id: crypto.randomUUID(), created_at: now, updated_at: now, deleted: false, ...d, name: d.name.trim() };
+    const e: FEvent = { id: crypto.randomUUID(), created_at: now, updated_at: now, deleted: false, members: [], tags: [], ...d, name: d.name.trim() };
     if (e.end_date < e.start_date) e.end_date = e.start_date;
     this.events.push(e);
     this.dirtyEvents.add(e.id);

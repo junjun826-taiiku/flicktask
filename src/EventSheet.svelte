@@ -3,7 +3,7 @@
   import { fade, fly, slide } from 'svelte/transition';
   import { flip } from 'svelte/animate';
   import { backOut, cubicOut } from 'svelte/easing';
-  import { store, COLORS, COLOR_HEX, type Color, type EventDetails, type Role } from './lib/store.svelte';
+  import { store, COLORS, COLOR_HEX, COLOR_NAME, type EventDetails, type Role } from './lib/store.svelte';
   import { eventSheet } from './lib/eventSheet.svelte';
   import { router } from './lib/router.svelte';
   import { toasts } from './lib/toast.svelte';
@@ -11,7 +11,6 @@
   import { vibrate } from './lib/motion';
   import Icon from './Icon.svelte';
 
-  const COLOR_NAME: Record<Color, string> = { blue: '青', orange: 'オレンジ', violet: '紫', pink: 'ピンク', green: '緑', teal: '青緑', gray: 'グレー' };
 
   type Draft = EventDetails & { roles: (Role & { key: number })[] };
   let draft = $state<Draft>(blank());

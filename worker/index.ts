@@ -159,8 +159,8 @@ app.get('/api/live', (c) => {
 });
 
 const TASK_COLS =
-  'id, title, status, created_at, updated_at, deleted, note, due_date, due_time, plan_date, plan_start, plan_end, kind, plan_end_date, event_id, roles, place, items';
-const EVENT_COLS = 'id, name, start_date, end_date, place, color, roles, note, closed, created_at, updated_at, deleted';
+  'id, title, status, created_at, updated_at, deleted, note, due_date, due_time, plan_date, plan_start, plan_end, kind, plan_end_date, event_id, roles, place, items, assignees, tag';
+const EVENT_COLS = 'id, name, start_date, end_date, place, color, roles, members, tags, note, closed, created_at, updated_at, deleted';
 const parseJson = (s: unknown) => {
   try {
     return typeof s === 'string' ? JSON.parse(s) : [];
@@ -168,9 +168,17 @@ const parseJson = (s: unknown) => {
     return [];
   }
 };
-const rows = (results: any[]) => results.map((t) => ({ ...t, deleted: !!t.deleted, roles: parseJson(t.roles) }));
+const rows = (results: any[]) =>
+  results.map((t) => ({ ...t, deleted: !!t.deleted, roles: parseJson(t.roles), assignees: parseJson(t.assignees), tag: t.tag ?? '' }));
 const eventRows = (results: any[]) =>
-  results.map((e) => ({ ...e, deleted: !!e.deleted, closed: !!e.closed, roles: parseJson(e.roles) }));
+  results.map((e) => ({
+    ...e,
+    deleted: !!e.deleted,
+    closed: !!e.closed,
+    roles: parseJson(e.roles),
+    members: parseJson(e.members),
+    tags: parseJson(e.tags),
+  }));
 /** SQL for "tasks belonging to an event that is still running" — always part of a device's working set. */
 const ACTIVE_EVENT_TASK = `event_id IN (SELECT id FROM events WHERE user_id = tasks.user_id AND closed = 0 AND deleted = 0)`;
 
@@ -266,6 +274,10 @@ type TaskIn = {
   roles?: string[];
   place?: string;
   items?: string;
+  /** 準備: names of the イベント担当 doing it */
+  assignees?: string[];
+  /** 予定: one tag name ('' = none) */
+  tag?: string;
 };
 
 type EventIn = {
@@ -276,13 +288,24 @@ type EventIn = {
   place?: string;
   color?: string;
   roles?: { name: string; color: string }[];
+  /** イベント担当: any number of people */
+  members?: { name: string; color: string }[];
+  /** custom 予定 tags (the built-in ones are not stored) */
+  tags?: string[];
   note?: string;
   closed?: boolean;
   created_at: number;
   updated_at: number;
   deleted?: boolean;
 };
-const COLORS = ['blue', 'orange', 'violet', 'pink', 'green', 'teal', 'gray'];
+/** 15 colours shared by events, roles and people; the first 7 are the original set. */
+const COLORS = ['blue', 'orange', 'violet', 'pink', 'green', 'teal', 'gray', 'red', 'yellow', 'brown', 'lime', 'sky', 'magenta', 'indigo', 'coral'];
+const isNameList = (v: unknown, max: number, len: number) =>
+  Array.isArray(v) && v.length <= max && v.every((x) => typeof x === 'string' && x.length <= len);
+const isNamedColors = (v: unknown, max: number) =>
+  Array.isArray(v) &&
+  v.length <= max &&
+  v.every((r) => r && typeof r.name === 'string' && r.name.trim() && r.name.length <= 30 && COLORS.includes(r.color));
 
 const isDate = (v: unknown) => v == null || (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v));
 const isTime = (v: unknown) => v == null || (typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v));
@@ -302,6 +325,8 @@ function invalid(t: TaskIn): string | null {
     return 'bad roles';
   if (t.place != null && (typeof t.place !== 'string' || t.place.length > 200)) return 'bad place';
   if (t.items != null && (typeof t.items !== 'string' || t.items.length > 1000)) return 'bad items';
+  if (t.assignees != null && !isNameList(t.assignees, 30, 30)) return 'bad assignees';
+  if (t.tag != null && (typeof t.tag !== 'string' || t.tag.length > 30)) return 'bad tag';
   return null;
 }
 
@@ -311,13 +336,9 @@ function invalidEvent(e: EventIn): string | null {
   if (!e.start_date || !e.end_date || !isDate(e.start_date) || !isDate(e.end_date) || e.end_date < e.start_date) return 'bad dates';
   if (e.place != null && (typeof e.place !== 'string' || e.place.length > 200)) return 'bad place';
   if (e.color != null && !COLORS.includes(e.color)) return 'bad color';
-  if (
-    e.roles != null &&
-    (!Array.isArray(e.roles) ||
-      e.roles.length > 20 ||
-      e.roles.some((r) => !r || typeof r.name !== 'string' || !r.name.trim() || r.name.length > 30 || !COLORS.includes(r.color)))
-  )
-    return 'bad roles';
+  if (e.roles != null && !isNamedColors(e.roles, 30)) return 'bad roles';
+  if (e.members != null && !isNamedColors(e.members, 50)) return 'bad members';
+  if (e.tags != null && !isNameList(e.tags, 30, 30)) return 'bad tags';
   if (e.note != null && (typeof e.note !== 'string' || e.note.length > 20000)) return 'bad note';
   return null;
 }
@@ -325,10 +346,12 @@ function invalidEvent(e: EventIn): string | null {
 function upsertEvent(db: D1Database, userId: string, e: EventIn, now: number) {
   return db
     .prepare(
-      `INSERT INTO events (id, user_id, name, start_date, end_date, place, color, roles, note, closed, created_at, updated_at, deleted, synced_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO events (id, user_id, name, start_date, end_date, place, color, roles, note, closed, created_at, updated_at, deleted, synced_at,
+         members, tags)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET name = excluded.name, start_date = excluded.start_date, end_date = excluded.end_date,
          place = excluded.place, color = excluded.color, roles = excluded.roles, note = excluded.note, closed = excluded.closed,
+         members = excluded.members, tags = excluded.tags,
          updated_at = excluded.updated_at, deleted = excluded.deleted, synced_at = excluded.synced_at
        WHERE events.user_id = excluded.user_id AND excluded.updated_at > events.updated_at`,
     )
@@ -347,6 +370,8 @@ function upsertEvent(db: D1Database, userId: string, e: EventIn, now: number) {
       Math.floor(Number(e.updated_at)) || now,
       e.deleted ? 1 : 0,
       now,
+      JSON.stringify((e.members ?? []).map((r) => ({ name: r.name.trim(), color: r.color }))),
+      JSON.stringify((e.tags ?? []).map((x) => x.trim()).filter(Boolean)),
     );
 }
 
@@ -356,14 +381,15 @@ function upsert(db: D1Database, userId: string, t: TaskIn, now: number) {
     .prepare(
       `INSERT INTO tasks (id, user_id, title, status, created_at, updated_at, deleted,
          note, due_date, due_time, plan_date, plan_start, plan_end, kind, plan_end_date, synced_at,
-         event_id, roles, place, items)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         event_id, roles, place, items, assignees, tag)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status,
          updated_at = excluded.updated_at, deleted = excluded.deleted, note = excluded.note,
          due_date = excluded.due_date, due_time = excluded.due_time,
          plan_date = excluded.plan_date, plan_start = excluded.plan_start, plan_end = excluded.plan_end,
          kind = excluded.kind, plan_end_date = excluded.plan_end_date, synced_at = excluded.synced_at,
-         event_id = excluded.event_id, roles = excluded.roles, place = excluded.place, items = excluded.items
+         event_id = excluded.event_id, roles = excluded.roles, place = excluded.place, items = excluded.items,
+         assignees = excluded.assignees, tag = excluded.tag
        WHERE tasks.user_id = excluded.user_id AND excluded.updated_at > tasks.updated_at`,
     )
     .bind(
@@ -388,6 +414,8 @@ function upsert(db: D1Database, userId: string, t: TaskIn, now: number) {
       JSON.stringify((t.roles ?? []).map((r) => r.trim()).filter(Boolean)),
       t.place ?? '',
       t.items ?? '',
+      JSON.stringify((t.assignees ?? []).map((r) => r.trim()).filter(Boolean)),
+      (t.tag ?? '').trim(),
     );
 }
 
