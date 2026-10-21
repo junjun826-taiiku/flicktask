@@ -107,3 +107,93 @@ test('old data without the new fields still loads, and new fields survive a sync
   expect(stored.members).toEqual([{ name: '堤', color: 'brown' }]);
   await ctx.close();
 });
+
+test.describe('new home', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(
+      (p) => {
+        if (localStorage.getItem('home-seeded')) return;
+        const now = Date.now();
+        const evs = JSON.parse(localStorage.getItem('ft.events.v1') ?? '[]');
+        evs.push({ id: 'ev2', name: '津田沼祭', start_date: p.d40, end_date: p.d41, place: '', color: 'pink', note: '', closed: false, roles: [], members: [], tags: [], created_at: now, updated_at: now, deleted: false });
+        localStorage.setItem('ft.events.v1', JSON.stringify(evs));
+        const tasks = JSON.parse(localStorage.getItem('ft.tasks.v1') ?? '[]');
+        const base = { status: 'todo', kind: 'task', deleted: false, note: '', due_time: null, plan_date: null, plan_start: null, plan_end: null, plan_end_date: null, roles: [], place: '', items: '', assignees: [], tag: '', created_at: now, updated_at: now };
+        // t1 (案内状の発送, ev1) and t2/t3 (no event, no date) come from the outer seed
+        tasks.push(
+          { ...base, id: 'w1', title: '期限切れの申請', event_id: 'ev1', due_date: p.dm2, assignees: ['佐藤'] },
+          { ...base, id: 'w2', title: '出店申請', event_id: 'ev2', due_date: p.today },
+          { ...base, id: 'w3', title: '来月の準備', event_id: 'ev2', due_date: p.d20 },
+          { ...base, id: 'w4', title: '個人の締切', event_id: null, due_date: p.today },
+          { ...base, id: 's1', title: '幹部読み合わせ', kind: 'event', event_id: 'ev1', plan_date: p.d1, plan_start: '19:00', tag: '幹部読み合わせ' },
+        );
+        localStorage.setItem('ft.tasks.v1', JSON.stringify(tasks));
+        localStorage.setItem('home-seeded', '1');
+      },
+      { today: plus(0), dm2: plus(-2), d1: plus(1), d20: plus(20), d40: plus(40), d41: plus(41) },
+    );
+  });
+
+  test('これからの流れ: one row per running event with its deadlines; a row opens the event', async ({ page }) => {
+    await page.goto('/next');
+    const rows = page.getByTestId('nx-tl-row');
+    await expect(rows).toHaveCount(2);
+    const obog = rows.filter({ hasText: '2026 OBOG総会' });
+    // w1 is overdue (2 days ago); it is drawn red unless it falls before this week's Monday
+    await expect(rows.filter({ hasText: '津田沼祭' }).getByTestId('nx-tl-due')).toHaveCount(2);
+    await obog.click();
+    await expect(page).toHaveURL(/\/next\/events\/ev1$/);
+    await expect(page.getByTestId('nx-event-wip')).toContainText('2026 OBOG総会');
+    await page.goBack();
+    await expect(page.getByTestId('nx-timeline')).toBeVisible();
+  });
+
+  test('今週やること: grouped by event (その他 last), or one list by deadline; the choice is remembered', async ({ page }) => {
+    await page.goto('/next');
+    const week = page.getByTestId('nx-week');
+    const groups = week.getByTestId('nx-week-group');
+    await expect(groups).toHaveCount(3);
+    await expect(groups.nth(0)).toContainText('2026 OBOG総会');
+    await expect(groups.nth(0)).toContainText('期限切れ');
+    await expect(groups.nth(2)).toContainText('その他');
+    await expect(groups.nth(2)).toContainText('個人の締切');
+    await expect(week).not.toContainText('来月の準備'); // beyond this week
+    await expect(week).not.toContainText('個人のメモ'); // no date
+
+    await page.getByTestId('nx-week-by-due').click();
+    await expect(week.getByTestId('nx-week-group')).toHaveCount(0);
+    await expect(week.getByTestId('nx-week-row').first()).toContainText('期限切れの申請'); // oldest first
+    await page.reload();
+    await expect(page.getByTestId('nx-week-by-due')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('checking a task off completes it, with undo', async ({ page }) => {
+    await page.goto('/next');
+    const row = page.getByTestId('nx-week-row').filter({ hasText: '出店申請' });
+    await row.getByTestId('nx-week-check').click();
+    await expect(row).toHaveCount(0);
+    await page.getByTestId('nx-toast').filter({ hasText: '完了' }).getByRole('button', { name: '元に戻す' }).click();
+    await expect(page.getByTestId('nx-week-row').filter({ hasText: '出店申請' })).toBeVisible();
+  });
+
+  test('直近の予定 lists upcoming 予定 with their tag', async ({ page }) => {
+    await page.goto('/next');
+    const item = page.getByTestId('nx-upcoming-item').filter({ hasText: '幹部読み合わせ' });
+    await expect(item).toContainText('19:00');
+    await expect(item).toContainText('2026 OBOG総会');
+  });
+
+  test('mini calendar: today is marked, months page, days with deadlines get a dot', async ({ page }) => {
+    await page.goto('/next');
+    if (await page.getByTestId('nx-cal-toggle').isVisible()) await page.getByTestId('nx-cal-toggle').click(); // folded on phones
+    const cal = page.getByTestId('nx-minical');
+    await expect(cal).toBeVisible();
+    const title = await page.getByTestId('nx-minical-title').textContent();
+    await expect(cal.locator(`[data-date="${plus(0)}"]`)).toHaveClass(/today/);
+    await page.getByTestId('nx-minical-next').click();
+    await expect(page.getByTestId('nx-minical-title')).not.toHaveText(title!);
+    await page.getByTestId('nx-minical-prev').click();
+    await expect(page.getByTestId('nx-minical-title')).toHaveText(title!);
+    expect(await cal.getByTestId('nx-minical-dot').count()).toBeGreaterThan(0);
+  });
+});

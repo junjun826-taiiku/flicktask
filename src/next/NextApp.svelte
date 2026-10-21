@@ -1,11 +1,17 @@
 <script lang="ts">
   // The new design, built at /next next to the current app until it replaces it.
   import { onMount } from 'svelte';
-  import { store, COLOR_HEX } from '../lib/store.svelte';
+  import { flip } from 'svelte/animate';
+  import { fly } from 'svelte/transition';
+  import { store } from '../lib/store.svelte';
   import { live } from '../lib/live.svelte';
-  import { countdown, rangeLabel } from '../lib/dates';
-  import { progress } from '../lib/eventView';
+  import { toasts } from '../lib/toast.svelte';
   import { theme } from './theme.svelte';
+  import { nav } from './nav.svelte';
+  import Sidebar from './Sidebar.svelte';
+  import Timeline from './Timeline.svelte';
+  import WeekTasks from './WeekTasks.svelte';
+  import Upcoming from './Upcoming.svelte';
 
   $effect(() => {
     if (store.user) live.start();
@@ -15,86 +21,90 @@
     document.body.classList.toggle('light', theme.value === 'light');
   });
   onMount(async () => {
-    document.body.classList.add('nx-body', 'ready');
+    document.body.classList.add('nx-body');
     document.getElementById('boot')?.remove();
     await store.init();
+    document.body.classList.add('ready');
   });
 
   const todayLabel = new Intl.DateTimeFormat('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date());
-  const running = $derived(store.activeEvents);
-  /** tasks that belong to no event live under 「その他」 */
-  const otherCount = $derived(store.tasks.filter((t) => !t.deleted && t.kind === 'task' && t.status !== 'done' && !store.eventById(t.event_id)).length);
+  const ev = $derived(nav.route.name === 'event' ? (nav.route.id === 'other' ? null : store.eventById(nav.route.id)) : null);
 </script>
 
-<div class="nx" data-theme={theme.value} data-testid="nx">
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+<div class="nx" data-theme={theme.value} data-testid="nx" onclick={nav.click}>
   <div class="nx-shell">
-    <aside class="nx-side" aria-label="イベント">
-      <a class="nx-brand" href="/next">
-        <span class="nx-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
-        <span>Flick</span>
-      </a>
-      <span class="nx-label">イベント</span>
-      <div class="nx-events" data-testid="nx-events">
-        {#each running as e (e.id)}
-          {@const c = countdown(e.start_date, e.end_date)}
-          {@const p = progress(store.tasks, e)}
-          <a class="nx-event" href="/next/events/{e.id}" data-testid="nx-event">
-            <span class="nx-event-top">
-              <span class="nx-event-name"><i style="background:{COLOR_HEX[e.color]}"></i>{e.name}</span>
-              <span class="nx-event-days nx-num">{c.phase === 'before' ? c.days : c.label}{#if c.phase === 'before'}<small>日</small>{/if}</span>
-            </span>
-            <span class="nx-event-when">{rangeLabel(e.start_date, e.end_date)}{e.place ? `・${e.place}` : ''}</span>
-            <span class="nx-event-bar"><i style="width:{p.total ? (p.done / p.total) * 100 : 0}%; background:{COLOR_HEX[e.color]}"></i></span>
-          </a>
-        {/each}
-        <a class="nx-event other" href="/next/events/other" data-testid="nx-other">
-          <span class="nx-event-top"><span class="nx-event-name"><i></i>その他</span><span class="nx-event-days nx-num">{otherCount}<small>件</small></span></span>
-        </a>
-      </div>
-    </aside>
+    <Sidebar />
 
     <main class="nx-main">
-      <header class="nx-head">
-        <div class="nx-today">
+      <header class="head">
+        <div class="today">
           <span class="nx-label">今日</span>
           <h1>{todayLabel}</h1>
         </div>
-        <button class="nx-btn nx-chip" onclick={() => theme.toggle()} aria-label="ライトとダークを切り替える" data-testid="nx-theme">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg>{theme.value === 'dark' ? 'ダーク' : 'ライト'}
+        <button class="btn nx-chip cal-toggle" onclick={() => (nav.calOpen = !nav.calOpen)} aria-expanded={nav.calOpen} aria-label="カレンダー" data-testid="nx-cal-toggle">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3.5" /><path d="M3.5 10h17M8.5 3v4M15.5 3v4" /></svg>
+        </button>
+        <button class="btn nx-chip" onclick={() => theme.toggle()} aria-label="ライトとダークを切り替える" data-testid="nx-theme">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg><span class="label">{theme.value === 'dark' ? 'ダーク' : 'ライト'}</span>
         </button>
         {#if store.user}
-          <span class="nx-avatar" title={store.user.email}>{(store.user.name ?? store.user.email)[0]}</span>
-        {:else}
-          <a class="nx-btn nx-chip" href="/auth/google">ログイン</a>
+          <span class="avatar" title={store.user.email} data-testid="nx-avatar">{(store.user.name ?? store.user.email)[0]}</span>
+        {:else if store.ready}
+          <a class="btn nx-chip" href="/auth/google" data-testid="nx-login">ログイン</a>
         {/if}
       </header>
-      <section class="nx-panel nx-wip" data-testid="nx-wip">新しいホームを作成中です。今のアプリは <a href="/">こちら</a></section>
+
+      {#if nav.route.name === 'home'}
+        <Timeline />
+        <div class="lower">
+          <div class="week-col"><WeekTasks /></div>
+          <div class="up-col"><Upcoming /></div>
+        </div>
+      {:else}
+        <!-- stage 2 builds the event screen; until then the current one is a click away -->
+        <section class="nx-panel wip" data-testid="nx-event-wip">
+          <h2>{ev ? ev.name : nav.route.id === 'other' ? 'その他' : 'イベントが見つかりません'}</h2>
+          <p>新しいイベント画面は作成中です。</p>
+          {#if ev}<a class="btn nx-chip" href="/events/{ev.id}">今の画面で開く</a>{/if}
+        </section>
+      {/if}
     </main>
+  </div>
+
+  <div class="toasts" aria-live="polite">
+    {#each toasts.items as t (t.id)}
+      <div class="toast" animate:flip={{ duration: 300 }} in:fly={{ y: 30, duration: 360 }} out:fly={{ y: 16, duration: 200 }} data-testid="nx-toast">
+        <span>{t.text}</span>
+        {#if t.action}
+          <button onclick={() => (t.action!.run(), toasts.dismiss(t.id))}>{t.action.label}</button>
+        {/if}
+      </div>
+    {/each}
   </div>
 </div>
 
 <style>
-  .nx-brand { display: flex; align-items: center; gap: 10px; padding: 4px 6px 2px; font-family: var(--num); font-size: 17px; font-weight: 700; }
-  .nx-logo { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--accent); }
-  .nx-logo svg { width: 16px; height: 16px; fill: none; stroke: #fff; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
-  .nx-side > .nx-label { padding: 4px 6px 0; }
-  .nx-events { display: flex; flex-direction: column; gap: 8px; }
-  .nx-event { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--border); transition: background 0.2s; }
-  .nx-event:hover { background: var(--hi); }
-  .nx-event-top { display: flex; align-items: flex-start; gap: 10px; }
-  .nx-event-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .nx-event-name i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-  .nx-event-days { flex: none; font-size: 20px; font-weight: 700; line-height: 1; }
-  .nx-event-days small { font-family: var(--font); font-size: 11px; margin-left: 1px; }
-  .nx-event-when { font-size: 11.5px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .nx-event-bar { height: 4px; margin-top: 5px; border-radius: 2px; overflow: hidden; background: var(--track); }
-  .nx-event-bar i { display: block; height: 100%; border-radius: 2px; }
-  .nx-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 2px 2px 0; }
-  .nx-today { display: flex; flex-direction: column; gap: 2px; margin-right: auto; }
-  .nx-today h1 { margin: 0; font-size: 26px; font-weight: 800; }
-  .nx-btn { height: 38px; padding: 0 14px; border-radius: 12px; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
-  .nx-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .nx-avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #fff; background: #a64bd6; }
-  .nx-wip { padding: 28px; color: var(--sub); font-size: 14px; }
-  .nx-wip a { color: var(--accent); }
+  .head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 2px 2px 0; }
+  .today { display: flex; flex-direction: column; gap: 2px; margin-right: auto; }
+  .today h1 { margin: 0; font-size: 26px; font-weight: 800; }
+  .btn { height: 38px; padding: 0 14px; border-radius: 12px; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+  .btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .cal-toggle { display: none; }
+  .avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #fff; background: #a64bd6; }
+  .lower { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+  .week-col { flex: 999 1 460px; min-width: 0; }
+  .up-col { flex: 1 1 260px; min-width: 0; }
+  .wip { padding: 24px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+  .wip h2 { margin: 0; font-size: 20px; }
+  .wip p { margin: 0; color: var(--sub); font-size: 14px; }
+  .toasts { position: fixed; left: 0; right: 0; bottom: 20px; z-index: 80; display: grid; justify-items: center; gap: 8px; pointer-events: none; padding: 0 16px; }
+  .toast { pointer-events: auto; display: flex; align-items: center; gap: 14px; padding: 10px 12px 10px 16px; border-radius: 14px; font-size: 13.5px; font-weight: 600; color: var(--text); background: var(--drawer); border: 1px solid var(--border); box-shadow: 0 20px 40px -16px rgba(0, 0, 0, 0.6); }
+  .toast button { height: 30px; padding: 0 12px; border-radius: 9px; font-size: 12.5px; font-weight: 800; background: var(--chip); }
+  @media (max-width: 760px) {
+    .today h1 { font-size: 20px; }
+    .cal-toggle { display: inline-flex; padding: 0 11px; }
+    .btn .label { display: none; }
+    .btn:has(.label) { padding: 0 11px; }
+  }
 </style>

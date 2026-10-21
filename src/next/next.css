@@ -18,6 +18,7 @@
   --hi: rgba(255, 255, 255, 0.1);
   --drawer: rgba(22, 22, 22, 0.94);
   --over: #ff6b5b;
+  --over-text: #ff7b6b;
   --event: #2fc4b2;
   --shadow: 0 20px 40px -24px rgba(0, 0, 0, 0.8);
   --glow: radial-gradient(50% 40% at 10% 0%, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 70%),
@@ -49,6 +50,7 @@
   --card: rgba(255, 255, 255, 0.65);
   --hi: rgba(0, 0, 0, 0.07);
   --drawer: rgba(255, 255, 255, 0.95);
+  --over-text: #d9480f;
   --shadow: 0 14px 34px -22px rgba(0, 0, 0, 0.25);
   --glow: radial-gradient(50% 40% at 10% 0%, #ffffff 0%, rgba(255, 255, 255, 0) 70%);
   color-scheme: light;
