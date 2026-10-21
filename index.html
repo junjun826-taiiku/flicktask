@@ -8,8 +8,19 @@
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icon-180.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <script>
+      // The new design at /next paints its own background instead of the current app's memo skeleton.
+      if (location.pathname === '/next' || location.pathname.indexOf('/next/') === 0) {
+        var h = document.documentElement;
+        h.className += ' nx-boot';
+        try { if (localStorage.getItem('ft.theme.v1') === 'light') h.className += ' nx-light'; } catch (e) {}
+      }
+    </script>
     <!-- Critical CSS inlined so the memo field and skeleton paint on the very first frame, before any JS. -->
     <style>
+      html.nx-boot #boot, html.nx-boot .ambient { display: none; }
+      html.nx-boot, html.nx-boot body { background: #0a0a0a; }
+      html.nx-boot.nx-light, html.nx-boot.nx-light body { background: #f2f2f2; }
       :root {
         --bg: #f5f7fb;
         --ink: #14161c;

@@ -13,6 +13,7 @@
   import WeekTasks from './WeekTasks.svelte';
   import Upcoming from './Upcoming.svelte';
   import EventPage from './event/EventPage.svelte';
+  import EventEditor from './event/EventEditor.svelte';
 
   $effect(() => {
     if (store.user) live.start();
@@ -66,6 +67,8 @@
       {/if}
     </main>
   </div>
+
+  {#if nav.editing}{#key nav.editing}<EventEditor id={nav.editing} />{/key}{/if}
 
   <div class="toasts" aria-live="polite">
     {#each toasts.items as t (t.id)}

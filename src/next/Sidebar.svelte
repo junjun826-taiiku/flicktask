@@ -18,7 +18,7 @@
     <span class="nx-num">Flick</span>
   </a>
   <div class="cal-wrap" class:open={nav.calOpen}><MiniCal /></div>
-  <span class="nx-label head">イベント</span>
+  <div class="head-row"><span class="nx-label head">イベント</span><button class="new nx-chip" onclick={() => (nav.editing = "new")} data-testid="nx-new-event">＋ 新規</button></div>
   <nav class="events" data-testid="nx-events">
     {#each running as e (e.id)}
       {@const c = countdown(e.start_date, e.end_date)}
@@ -53,7 +53,8 @@
   .brand { display: flex; align-items: center; gap: 10px; padding: 4px 6px 2px; font-size: 17px; font-weight: 700; }
   .logo { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--accent); }
   .logo svg { width: 16px; height: 16px; fill: none; stroke: #fff; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
-  .head { padding: 4px 6px 0; }
+  .head-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 0; }
+  .new { height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; font-weight: 700; color: var(--sub); }
   .events { display: flex; flex-direction: column; gap: 8px; }
   .event { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--border); transition: background 0.2s, border-color 0.2s; }
   .event:hover { background: var(--hi); }
@@ -77,7 +78,7 @@
     /* phone: the event list becomes a row of chips */
     .events { flex-direction: row; overflow-x: auto; margin: 0 -16px; padding: 0 16px 2px; scrollbar-width: none; }
     .event { flex: none; width: 210px; }
-    .head { display: none; }
+    .head-row .head { visibility: hidden; }
     .days small { display: none; }
     .cal-wrap { display: none; }
     .cal-wrap.open { display: block; }

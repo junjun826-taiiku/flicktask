@@ -14,6 +14,8 @@ class Nav {
   route = $state<NxRoute>(parse());
   /** phone: the mini calendar is folded away behind a header button */
   calOpen = $state(false);
+  /** the event editor: an event id, "new", or closed */
+  editing = $state<string | null>(null);
   constructor() {
     addEventListener('popstate', () => (this.route = parse()));
   }

@@ -149,11 +149,11 @@ test('「その他」 holds tasks with no event; tasks added there have no event
   expect(t.event_id).toBeNull();
 });
 
-test('the other tabs point to the current screens until stage 3', async ({ page }) => {
+test('tabs switch in place and keep the URL', async ({ page }) => {
   await page.goto('/next/events/ev1');
   await page.getByTestId('nx-tab-day').click();
   await expect(page).toHaveURL(/tab=day/);
-  await expect(page.getByTestId('nx-tab-wip')).toBeVisible();
+  await expect(page.getByTestId('nx-day')).toBeVisible();
   await page.getByTestId('nx-tab-prep').click();
   await expect(page.getByTestId('nx-prep')).toBeVisible();
 });

@@ -82,7 +82,7 @@
 
     <label class="f grow">
       <span class="l">メモ</span>
-      <textarea class="memo" value={t.note} onblur={(e) => store.update(t.id, { note: e.currentTarget.value })} placeholder="連絡先、手順、注意点など" data-testid="nx-panel-note"></textarea>
+      <textarea class="memo-field" value={t.note} onblur={(e) => store.update(t.id, { note: e.currentTarget.value })} placeholder="連絡先、手順、注意点など" data-testid="nx-panel-note"></textarea>
     </label>
 
     <div class="acts">
@@ -117,8 +117,8 @@
   .people button.on { color: var(--text); background: var(--hi); border-color: var(--text); }
   .people button.on i { opacity: 1; }
   .none { margin: 0; font-size: 12px; color: var(--muted); }
-  .memo { flex: 1; min-height: 110px; resize: none; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--chip); color: var(--text); font: 500 13.5px/1.6 var(--font); outline: 0; }
-  .memo:focus, input:focus { border-color: var(--accent); }
+  .memo-field { flex: 1; min-height: 110px; resize: none; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--chip); color: var(--text); font: 500 13.5px/1.6 var(--font); outline: 0; }
+  .memo-field:focus, input:focus { border-color: var(--accent); }
   .acts { display: flex; gap: 8px; }
   .acts button { height: 40px; padding: 0 16px; border-radius: 12px; font-size: 13px; font-weight: 700; }
   .del { color: var(--over-text); }

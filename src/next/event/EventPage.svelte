@@ -6,6 +6,9 @@
   import { nav } from '../nav.svelte';
   import { prepOf } from './prep';
   import PrepTab from './PrepTab.svelte';
+  import DayTab from './DayTab.svelte';
+  import SchedTab from './SchedTab.svelte';
+  import MemoTab from './MemoTab.svelte';
 
   let { id, tab }: { id: string; tab: string } = $props();
   const today = todayFn();
@@ -69,7 +72,7 @@
           <span>準備 <span class="nx-num">{p.done}/{p.total}</span></span>
           <span class="bar"><i style="width:{p.total ? (p.done / p.total) * 100 : 0}%; background:{COLOR_HEX[e.color]}"></i></span>
         </div>
-        <a class="btn nx-chip" href="/events/{e.id}" title="イベントの編集は段階3で新しい画面になります" data-testid="nx-event-edit">編集</a>
+        <button class="btn nx-chip" onclick={() => (nav.editing = e.id)} data-testid="nx-event-edit">編集</button>
         <a class="btn primary" href="/events/{e.id}/live" data-testid="nx-live-start">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z" /></svg>当日モード
         </a>
@@ -98,11 +101,12 @@
 
   {#if current === 'prep'}
     <PrepTab event={e} />
-  {:else}
-    <section class="nx-panel wip" data-testid="nx-tab-wip">
-      <p>このタブは段階3で新しい画面になります。</p>
-      {#if e}<a class="btn nx-chip" href="/events/{e.id}?tab={current === 'memo' ? 'prep' : current}">今の画面で開く</a>{/if}
-    </section>
+  {:else if e && current === 'day'}
+    <DayTab event={e} />
+  {:else if e && current === 'sched'}
+    <SchedTab event={e} />
+  {:else if e && current === 'memo'}
+    {#key e.id}<MemoTab event={e} />{/key}
   {/if}
 {/if}
 
