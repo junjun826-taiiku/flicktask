@@ -30,8 +30,10 @@ export const STATUS_COLUMNS: { status: Status; label: string }[] = [
 export const memberColor = (e: FEvent | null, name: string) => COLOR_HEX[(e?.members.find((m) => m.name === name)?.color ?? 'gray') as Color];
 
 // ---------- member timeline ----------
-export const PILL_DAYS = 7; // a pill spans a week ending on its deadline; overlapping ones stack
-/** At least this many px per day, so a week's pill keeps its title readable; a long run-up scrolls sideways. */
+/** A pill runs from today to its deadline. In a row, the next one starts where the previous ends
+ *  (one after another, like a queue); only when that leaves it too short does it take a new row. */
+export const MIN_PILL_DAYS = 4;
+/** At least this many px per day, so a pill keeps its title readable; a long run-up scrolls sideways. */
 export const DAY_PX = 18;
 export type Pill = { task: Task; end: number; start: number; row: number; over: boolean };
 export type Lane = { key: string; name: string; color: string | null; pills: Pill[]; rows: number; open: number };
@@ -53,13 +55,16 @@ export function lanes(tasks: Task[], e: FEvent | null, members: Member[], today:
         .map((t) => ({ t, d: aimDate(t, e) }))
         .filter((x): x is { t: Task; d: string } => !!x.d && (x.d >= from || x.t.status !== 'done')) // done before the axis starts: nothing to draw; still open: pinned to the left edge
         .sort((a, b) => a.d.localeCompare(b.d));
+      const now = dayDiff(from, today);
       const rowEnds: number[] = [];
       const pills = mine.map(({ t, d }) => {
-        const end = Math.max(PILL_DAYS, dayDiff(from, d) + 1);
-        const start = end - PILL_DAYS;
-        let row = rowEnds.findIndex((x) => x <= start);
-        if (row < 0) (row = rowEnds.length), rowEnds.push(end);
-        else rowEnds[row] = end;
+        const end = Math.max(MIN_PILL_DAYS, dayDiff(from, d) + 1);
+        // from today; a deadline that is (nearly) here or past still gets a short pill ending on it
+        const base = Math.max(0, Math.min(now, end - MIN_PILL_DAYS));
+        let row = rowEnds.findIndex((x) => end - Math.max(base, x) >= MIN_PILL_DAYS);
+        if (row < 0) (row = rowEnds.length), rowEnds.push(base);
+        const start = Math.max(base, rowEnds[row]);
+        rowEnds[row] = end;
         return { task: t, end, start, row, over: d < today && t.status !== 'done' };
       });
       return { key, name, color, pills, rows: Math.max(1, rowEnds.length), open: tasks.filter(forMember(key)).filter((t) => t.status !== 'done').length };

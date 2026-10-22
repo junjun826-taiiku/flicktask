@@ -1,5 +1,5 @@
 <script lang="ts">
-  // One lane per イベント担当 (plus 担当なし); each task is a bar whose right end is its deadline.
+  // One lane per イベント担当 (plus 担当なし); each task is a bar in that person's colour, from today to its deadline.
   import type { FEvent, Task } from '../../lib/store.svelte';
   import { addDays, today as todayFn } from '../../lib/dates';
   import { aimDate, dayDiff } from '../home';
@@ -27,7 +27,7 @@
 
 <div class="legend" aria-hidden="true">
   <span><i class="todo"></i>未着手</span><span><i class="doing"></i>進行中</span><span><i class="done"></i>完了</span><span><i class="over"></i>期限切れ</span>
-  <span class="r">帯の右端が締切</span>
+  <span class="r">帯は今日から締切まで・色は担当</span>
 </div>
 <div class="scroll">
   <div class="tl" style="min-width:{Math.max(760, 132 + ax.days * DAY_PX)}px" data-testid="nx-member-timeline">
@@ -55,7 +55,7 @@
                 class="pill {p.task.status}"
                 class:over={p.over}
                 class:sel={selected === p.task.id}
-                style="top:{8 + p.row * 32}px; left:calc({at(p.start)}% + 2px); width:calc({at(p.end) - at(p.start)}% - 4px)"
+                style="top:{8 + p.row * 32}px; left:calc({at(p.start)}% + 2px); width:calc({at(p.end) - at(p.start)}% - 4px); --c:{l.color ?? '#8a8a8a'}"
                 onclick={() => open(p.task.id)}
                 title="{p.task.title}（{md(aimDate(p.task, event) ?? '')}まで）"
                 data-testid="nx-pill"
@@ -83,7 +83,8 @@
   .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 0 2px 10px; font-size: 11.5px; color: var(--sub); }
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
   .legend i { width: 18px; height: 10px; border-radius: 3px; border: 1.3px solid var(--border); background: var(--panel); }
-  .legend i.doing { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+  .legend i.todo { border-color: rgba(150, 150, 150, 0.5); background: rgba(150, 150, 150, 0.16); }
+  .legend i.doing { border: 1.6px solid #9a9a9a; background: rgba(150, 150, 150, 0.32); }
   .legend i.done { background: var(--chip); border-color: transparent; }
   .legend i.over { border: 1.3px dashed var(--over); background: rgba(255, 107, 91, 0.12); }
   .legend .r { margin-left: auto; }
@@ -116,9 +117,12 @@
   .pill { position: absolute; height: 26px; display: flex; align-items: center; padding: 0 10px; border-radius: 8px; font-size: 12px; font-weight: 700; text-align: left; white-space: nowrap; overflow: hidden;
     color: var(--text); background: var(--panel); border: 1.3px solid var(--border); }
   .pill span { overflow: hidden; text-overflow: ellipsis; }
+  /* in the timeline a pill wears its person's colour, kept see-through; 進行中 is the stronger version */
+  .track .pill { background: color-mix(in srgb, var(--c) 16%, transparent); border-color: color-mix(in srgb, var(--c) 45%, transparent); }
+  .track .pill.doing { background: color-mix(in srgb, var(--c) 30%, transparent); border: 1.6px solid var(--c); }
   .pill.doing { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
-  .pill.done { color: var(--muted); background: var(--chip); border-color: transparent; text-decoration: line-through; }
-  .pill.over { color: var(--over-text); background: rgba(255, 107, 91, 0.12); border: 1.3px dashed rgba(255, 107, 91, 0.8); }
+  .pill.done, .track .pill.done { color: var(--muted); background: var(--chip); border-color: transparent; text-decoration: line-through; }
+  .pill.over, .track .pill.over { color: var(--over-text); background: rgba(255, 107, 91, 0.12); border: 1.3px dashed rgba(255, 107, 91, 0.8); }
   .pill.sel { outline: 2px solid var(--text); }
   .undated { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--track); }
   .undated .l { font-size: 12px; font-weight: 700; color: var(--muted); margin-right: 4px; }
