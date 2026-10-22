@@ -31,8 +31,10 @@ export const memberColor = (e: FEvent | null, name: string) => COLOR_HEX[(e?.mem
 
 // ---------- member timeline ----------
 /** A pill runs from today to its deadline. In a row, the next one starts where the previous ends
- *  (one after another, like a queue); only when that leaves it too short does it take a new row. */
+ *  (one after another, like a queue) as long as that still leaves it two weeks; otherwise it takes a
+ *  new row from today. A deadline less than two weeks off only follows on when it loses nothing. */
 export const MIN_PILL_DAYS = 4;
+export const QUEUE_DAYS = 14;
 /** At least this many px per day, so a pill keeps its title readable; a long run-up scrolls sideways. */
 export const DAY_PX = 18;
 export type Pill = { task: Task; end: number; start: number; row: number; over: boolean };
@@ -61,7 +63,8 @@ export function lanes(tasks: Task[], e: FEvent | null, members: Member[], today:
         const end = Math.max(MIN_PILL_DAYS, dayDiff(from, d) + 1);
         // from today; a deadline that is (nearly) here or past still gets a short pill ending on it
         const base = Math.max(0, Math.min(now, end - MIN_PILL_DAYS));
-        let row = rowEnds.findIndex((x) => end - Math.max(base, x) >= MIN_PILL_DAYS);
+        const need = Math.min(QUEUE_DAYS, end - base);
+        let row = rowEnds.findIndex((x) => end - Math.max(base, x) >= need);
         if (row < 0) (row = rowEnds.length), rowEnds.push(base);
         const start = Math.max(base, rowEnds[row]);
         rowEnds[row] = end;
