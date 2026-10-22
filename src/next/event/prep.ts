@@ -31,6 +31,8 @@ export const memberColor = (e: FEvent | null, name: string) => COLOR_HEX[(e?.mem
 
 // ---------- member timeline ----------
 export const PILL_DAYS = 7; // a pill spans a week ending on its deadline; overlapping ones stack
+/** At least this many px per day, so a week's pill keeps its title readable; a long run-up scrolls sideways. */
+export const DAY_PX = 18;
 export type Pill = { task: Task; end: number; start: number; row: number; over: boolean };
 export type Lane = { key: string; name: string; color: string | null; pills: Pill[]; rows: number; open: number };
 /** Axis: a week before today → a little after the event (or 6 weeks for 「その他」). */

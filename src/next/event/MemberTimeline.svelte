@@ -3,7 +3,7 @@
   import type { FEvent, Task } from '../../lib/store.svelte';
   import { addDays, today as todayFn } from '../../lib/dates';
   import { aimDate, dayDiff } from '../home';
-  import { axis, forMember, lanes as makeLanes } from './prep';
+  import { axis, DAY_PX, forMember, lanes as makeLanes } from './prep';
 
   let { tasks, event, who, selected, open }: { tasks: Task[]; event: FEvent | null; who: string | null; selected: string | null; open: (id: string) => void } = $props();
   const today = todayFn();
@@ -30,7 +30,7 @@
   <span class="r">帯の右端が締切</span>
 </div>
 <div class="scroll">
-  <div class="tl" data-testid="nx-member-timeline">
+  <div class="tl" style="min-width:{Math.max(760, 132 + ax.days * DAY_PX)}px" data-testid="nx-member-timeline">
     <div class="ticks">
       <span></span>
       <div class="axis">{#each mondays as m}<span style="left:{at(m.i)}%">{m.label}</span>{/each}</div>
@@ -87,9 +87,13 @@
   .legend i.done { background: var(--chip); border-color: transparent; }
   .legend i.over { border: 1.3px dashed var(--over); background: rgba(255, 107, 91, 0.12); }
   .legend .r { margin-left: auto; }
-  .scroll { overflow-x: auto; }
-  .tl { min-width: 760px; }
+  .scroll { overflow-x: auto; scrollbar-width: thin; padding-bottom: 6px; }
   .ticks, .lane { display: grid; grid-template-columns: 120px minmax(0, 1fr); column-gap: 12px; }
+  /* the names stay put while the weeks scroll under them */
+  .tl { --solid: color-mix(in srgb, #fff 4.5%, var(--bg)); }
+  :global(.nx[data-theme='light']) .tl { --solid: color-mix(in srgb, #fff 78%, var(--bg)); }
+  .ticks > span:first-child, .who { position: sticky; left: 0; z-index: 3; background: var(--solid); box-shadow: 12px 0 0 var(--solid); }
+  .ticks > span:first-child { margin: -40px 0 0; }
   .ticks { margin-top: 22px; }
   .axis { position: relative; height: 22px; }
   .axis span { position: absolute; top: 2px; padding-left: 5px; font-family: var(--num); font-size: 11px; font-weight: 600; color: var(--muted); }
@@ -102,7 +106,7 @@
   .now { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--accent); z-index: 2; }
   .now span { left: -12px; color: var(--accent); }
   .lane { border-top: 1px solid var(--track); }
-  .who { display: flex; align-items: center; gap: 8px; padding-top: 6px; align-self: start; min-width: 0; }
+  .who { display: flex; align-items: center; gap: 8px; padding-top: 6px; align-self: stretch; align-items: flex-start; min-width: 0; }
   .av { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 800; color: #fff; }
   .av.none { color: var(--muted); background: var(--chip); }
   .nm { display: flex; flex-direction: column; min-width: 0; }
