@@ -3,11 +3,12 @@
   import { store, COLOR_HEX, type Task, type FEvent } from '../lib/store.svelte';
   import { toasts } from '../lib/toast.svelte';
   import { addDays, daysUntil, today as todayFn, weekday } from '../lib/dates';
-  import { byEvent, mondayOf, thisWeek, type WeekItem } from './home';
+  import { byEvent, monthAhead, upcomingTasks, type WeekItem } from './home';
 
-  const KEY = 'ft.weekMode.v1';
+  // やること: overdue and the coming month, grouped by event (v2: everyone starts on イベント別 again)
+  const KEY = 'ft.weekMode.v2';
   const today = todayFn();
-  const sunday = addDays(mondayOf(today), 6);
+  const until = monthAhead(today);
   let mode = $state<'event' | 'due'>(load());
   function load(): 'event' | 'due' {
     try {
@@ -23,7 +24,7 @@
     } catch {}
   }
 
-  const items = $derived(thisWeek(store.tasks, (id) => store.eventById(id), today));
+  const items = $derived(upcomingTasks(store.tasks, (id) => store.eventById(id), today, until));
   const groups = $derived(byEvent(items, store.activeEvents));
   const md = (s: string) => `${Number(s.slice(5, 7))}/${Number(s.slice(8))}`;
   const dueLabel = (x: WeekItem) => (x.over ? `期限切れ ${md(x.date)}` : x.date === today ? '今日' : x.date === addDays(today, 1) ? '明日' : `${md(x.date)}(${weekday(x.date)})`);
@@ -52,17 +53,17 @@
   </div>
 {/snippet}
 
-<section class="nx-panel week" aria-label="今週やること" data-testid="nx-week">
+<section class="nx-panel week" aria-label="やること" data-testid="nx-week">
   <div class="head">
-    <h2>今週やること</h2>
-    <span class="sub">期限切れと{md(sunday)}（日）まで</span>
+    <h2>やること</h2>
+    <span class="sub">期限切れと{md(until)}（{weekday(until)}）まで</span>
     <div class="seg nx-chip" role="group" aria-label="並べ方">
       <button class:on={mode === 'event'} aria-pressed={mode === 'event'} onclick={() => setMode('event')} data-testid="nx-week-by-event">イベント別</button>
       <button class:on={mode === 'due'} aria-pressed={mode === 'due'} onclick={() => setMode('due')} data-testid="nx-week-by-due">締切順</button>
     </div>
   </div>
   {#if items.length === 0}
-    <p class="empty" data-testid="nx-week-empty">今週の締切はありません</p>
+    <p class="empty" data-testid="nx-week-empty">1か月以内の締切はありません</p>
   {:else if mode === 'event'}
     <div class="groups">
       {#each groups as g (g.key)}

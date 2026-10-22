@@ -116,14 +116,15 @@ test.describe('new home', () => {
         tasks.push(
           { ...base, id: 'w1', title: '期限切れの申請', event_id: 'ev1', due_date: p.dm2, assignees: ['佐藤'] },
           { ...base, id: 'w2', title: '出店申請', event_id: 'ev2', due_date: p.today },
-          { ...base, id: 'w3', title: '来月の準備', event_id: 'ev2', due_date: p.d20 },
+          { ...base, id: 'w3', title: '再来月の準備', event_id: 'ev2', due_date: p.d45 },
+          { ...base, id: 'w5', title: '3週間後の締切', event_id: 'ev2', due_date: p.d20 },
           { ...base, id: 'w4', title: '個人の締切', event_id: null, due_date: p.today },
           { ...base, id: 's1', title: '幹部読み合わせ', kind: 'event', event_id: 'ev1', plan_date: p.d1, plan_start: '19:00', tag: '幹部読み合わせ' },
         );
         localStorage.setItem('ft.tasks.v1', JSON.stringify(tasks));
         localStorage.setItem('home-seeded', '1');
       },
-      { today: plus(0), dm2: plus(-2), d1: plus(1), d20: plus(20), d40: plus(40), d41: plus(41) },
+      { today: plus(0), dm2: plus(-2), d1: plus(1), d20: plus(20), d40: plus(40), d41: plus(41), d45: plus(45) },
     );
   });
 
@@ -133,7 +134,7 @@ test.describe('new home', () => {
     await expect(rows).toHaveCount(2);
     const obog = rows.filter({ hasText: '2026 OBOG総会' });
     // w1 is overdue (2 days ago); it is drawn red unless it falls before this week's Monday
-    await expect(rows.filter({ hasText: '津田沼祭' }).getByTestId('nx-tl-due')).toHaveCount(2);
+    await expect(rows.filter({ hasText: '津田沼祭' }).getByTestId('nx-tl-due')).toHaveCount(3);
     await obog.click();
     await expect(page).toHaveURL(/\/events\/ev1$/);
     await expect(page.getByTestId('nx-event-title')).toContainText('2026 OBOG総会');
@@ -141,7 +142,7 @@ test.describe('new home', () => {
     await expect(page.getByTestId('nx-timeline')).toBeVisible();
   });
 
-  test('今週やること: grouped by event (その他 last), or one list by deadline; the choice is remembered', async ({ page }) => {
+  test('やること: the coming month grouped by event (その他 last), or one list by deadline; the choice is remembered', async ({ page }) => {
     await page.goto('/');
     const week = page.getByTestId('nx-week');
     const groups = week.getByTestId('nx-week-group');
@@ -150,7 +151,9 @@ test.describe('new home', () => {
     await expect(groups.nth(0)).toContainText('期限切れ');
     await expect(groups.nth(2)).toContainText('その他');
     await expect(groups.nth(2)).toContainText('個人の締切');
-    await expect(week).not.toContainText('来月の準備'); // beyond this week
+    await expect(week.locator('h2')).toHaveText('やること');
+    await expect(groups.nth(1)).toContainText('3週間後の締切'); // within the month
+    await expect(week).not.toContainText('再来月の準備'); // beyond a month
     await expect(week).not.toContainText('個人のメモ'); // no date
 
     await page.getByTestId('nx-week-by-due').click();

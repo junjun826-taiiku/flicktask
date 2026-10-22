@@ -1,6 +1,6 @@
 // What the new home shows, as plain functions of the store's data (easy to test and reason about).
 import { BUILTIN_TAGS, COLOR_HEX, coversDate, type FEvent, type Task } from '../lib/store.svelte';
-import { addDays, parseYmd } from '../lib/dates';
+import { addDays, parseYmd, ymd } from '../lib/dates';
 import { isMove } from '../lib/eventView';
 
 /** Days between two 'YYYY-MM-DD' dates (b - a). */
@@ -52,19 +52,24 @@ export function timeline(tasks: Task[], events: FEvent[], today: string) {
   return { from, today: dayDiff(from, today), rows, months };
 }
 
-// ---------- 今週やること ----------
+// ---------- やること ----------
 export type WeekItem = { task: Task; event: FEvent | null; date: string; over: boolean };
-/** Unfinished tasks that are overdue or aimed at this week (through Sunday), soonest first.
+/** The same day next month (1/31 → 2/28): the end of やること's range. */
+export function monthAhead(today: string) {
+  const [y, m, d] = today.split('-').map(Number);
+  const last = new Date(y, m + 1, 0).getDate();
+  return ymd(new Date(y, m, Math.min(d, last)));
+}
+/** Unfinished tasks that are overdue or aimed at the coming month (through `until`), soonest first.
  *  A finished event's leftovers stay in 過去資料 with it, not here. */
-export function thisWeek(tasks: Task[], eventById: (id: string | null) => FEvent | null, today: string): WeekItem[] {
-  const sunday = addDays(mondayOf(today), 6);
+export function upcomingTasks(tasks: Task[], eventById: (id: string | null) => FEvent | null, today: string, until = monthAhead(today)): WeekItem[] {
   return tasks
     .filter(openTask)
     .map((t) => {
       const event = eventById(t.event_id);
       return { task: t, event, date: aimDate(t, event) };
     })
-    .filter((x): x is WeekItem & { date: string } => !!x.date && x.date <= sunday && !x.event?.closed)
+    .filter((x): x is WeekItem & { date: string } => !!x.date && x.date <= until && !x.event?.closed)
     .map((x) => ({ ...x, over: x.date < today }))
     .sort((a, b) => a.date.localeCompare(b.date) || (a.task.due_time ?? '99').localeCompare(b.task.due_time ?? '99') || a.task.created_at - b.task.created_at);
 }
