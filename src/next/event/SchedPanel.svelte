@@ -1,12 +1,13 @@
 <script lang="ts">
   // Edit one 予定 of the event, with its tag picked from the list (or a new tag made here).
+  // With no event it edits a 予定 of 「その他」 (added from the calendar); a new tag is then kept on that 予定 only.
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { store, BUILTIN_TAGS, type FEvent } from '../../lib/store.svelte';
   import { toasts } from '../../lib/toast.svelte';
   import { tagColor } from '../home';
 
-  let { id, event, tags, close }: { id: string; event: FEvent; tags: string[]; close: () => void } = $props();
+  let { id, event, tags, close }: { id: string; event: FEvent | null; tags: string[]; close: () => void } = $props();
   const t = $derived(store.tasks.find((x) => x.id === id && !x.deleted) ?? null);
   $effect(() => {
     if (!t) close();
@@ -22,7 +23,7 @@
   function makeTag() {
     const v = newTag.trim().slice(0, 30);
     if (!v || !t) return;
-    if (!tags.includes(v)) store.updateEvent(event.id, { tags: [...event.tags, v] });
+    if (event && !tags.includes(v)) store.updateEvent(event.id, { tags: [...event.tags, v] });
     store.update(t.id, { tag: v });
     newTag = '';
     making = false;
@@ -43,7 +44,7 @@
   <div class="scrim" onclick={close} transition:fade={{ duration: 180 }}></div>
   <aside class="panel" role="dialog" aria-modal="true" aria-label="予定の編集" transition:fly={{ x: 420, duration: 300, easing: cubicOut, opacity: 1 }} data-testid="nx-sched-panel">
     <div class="top">
-      <span class="ctx">{event.name}・予定</span>
+      <span class="ctx">{event?.name ?? 'その他'}・予定</span>
       <button class="x nx-chip" onclick={close} aria-label="閉じる" data-testid="nx-sched-panel-close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
     </div>
     <textarea class="title" bind:this={titleEl} value={t.title} rows="2" onblur={saveTitle} onkeydown={(e) => e.key === 'Enter' && !e.isComposing && (e.preventDefault(), titleEl?.blur())} aria-label="タイトル" data-testid="nx-sched-panel-title"></textarea>
@@ -51,9 +52,9 @@
     <div class="f">
       <span class="l">タグ</span>
       <div class="tags">
-        {#each tags as g}
+        {#each !event && t.tag && !tags.includes(t.tag) ? [...tags, t.tag] : tags as g}
           {@const on = t.tag === g}
-          <button class:on aria-pressed={on} style="--c:{tagColor(g)}" onclick={() => store.update(t.id, { tag: on ? '' : g })} data-testid="nx-sched-panel-tag"><i></i>{g}{#if !BUILTIN_TAGS.includes(g as never)}<small>（このイベント）</small>{/if}</button>
+          <button class:on aria-pressed={on} style="--c:{tagColor(g)}" onclick={() => store.update(t.id, { tag: on ? '' : g })} data-testid="nx-sched-panel-tag"><i></i>{g}{#if event && !BUILTIN_TAGS.includes(g as never)}<small>（このイベント）</small>{/if}</button>
         {/each}
         {#if making}
           <input class="newtag" bind:value={newTag} placeholder="新しいタグ" maxlength="30" onkeydown={(e) => e.key === 'Enter' && !e.isComposing && (e.preventDefault(), makeTag())} onblur={makeTag} aria-label="新しいタグ" data-testid="nx-sched-panel-newtag" />

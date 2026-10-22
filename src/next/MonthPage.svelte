@@ -1,12 +1,11 @@
 <script lang="ts">
   // Month view of the new design. Multi-day bars run across each week row as one piece; tapping a day lists it.
-  import { fade, fly } from 'svelte/transition';
-  import { cubicOut } from 'svelte/easing';
   import { store, type Task } from '../lib/store.svelte';
-  import { addMonths, monthGrid, monthOf, today as todayFn, weekday } from '../lib/dates';
+  import { addMonths, monthGrid, monthOf, today as todayFn } from '../lib/dates';
   import { monthItems, type MonthItem } from '../lib/calendar';
   import { tagColor } from './home';
   import { nav } from './nav.svelte';
+  import CalDay from './CalDay.svelte';
 
   let { month, day }: { month: string; day: string | null } = $props();
   const today = todayFn();
@@ -40,9 +39,7 @@
   const openDay = (d: string) => nav.go(`/calendar?m=${month}&d=${d}`);
   const closeDay = () => nav.go(`/calendar?m=${month}`);
 
-  // ---------- the day list ----------
-  const dayList = $derived(day ? (itemsOf.get(day) ?? monthItems(monthTasks, day, store.liveEvents)) : []);
-  const kindLabel = { meet: 'イベント', event: '予定', plan: 'やる時間', due: '締切' } as const;
+  // ---------- the day (CalDay) ----------
   function hrefOf(it: MonthItem) {
     if (it.kind === 'meet') return `/events/${it.task.id.slice(5)}`;
     const t = it.task as Task;
@@ -104,25 +101,7 @@
 </section>
 
 {#if day}
-  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-  <div class="scrim" onclick={closeDay} transition:fade={{ duration: 160 }}></div>
-  <aside class="daypanel" role="dialog" aria-modal="true" aria-label="{Number(day.slice(5, 7))}月{Number(day.slice(8))}日" transition:fly={{ x: 380, duration: 280, easing: cubicOut, opacity: 1 }} data-testid="nx-month-day">
-    <div class="dh">
-      <h2>{Number(day.slice(5, 7))}月{Number(day.slice(8))}日（{weekday(day)}）</h2>
-      <button class="x nx-chip" onclick={closeDay} aria-label="閉じる"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
-    </div>
-    {#if dayList.length === 0}
-      <p class="empty">この日の予定・締切はありません</p>
-    {:else}
-      {#each dayList as it (it.task.id + it.kind)}
-        <a class="it" href={hrefOf(it)} data-testid="nx-month-day-item">
-          <i style="background:{colorOf(it)}"></i>
-          <span class="tm nx-num">{it.time ?? (it.kind === 'meet' ? '' : '終日')}</span>
-          <span class="b"><b>{it.task.title}</b><small>{kindLabel[it.kind]}{it.kind !== 'meet' && store.eventById(it.task.event_id) ? `・${store.eventById(it.task.event_id)!.name}` : ''}</small></span>
-        </a>
-      {/each}
-    {/if}
-  </aside>
+  <CalDay {day} tasks={monthTasks} close={closeDay} go={(d) => nav.go(`/calendar?m=${monthOf(d)}&d=${d}`)} {hrefOf} {colorOf} />
 {/if}
 
 <style>
@@ -163,22 +142,6 @@
   .legend i.event { background: color-mix(in srgb, var(--event) 40%, transparent); box-shadow: inset 2px 0 0 var(--event); }
   .legend i.plan { background: color-mix(in srgb, var(--accent) 75%, #000); }
   .legend i.due { border: 1px dashed var(--over); }
-  .scrim { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.3); }
-  .daypanel { position: fixed; top: 0; right: 0; bottom: 0; z-index: 61; width: 380px; max-width: 100%; padding: 20px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto;
-    background: var(--drawer); border-left: 1px solid var(--border); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); box-shadow: -30px 0 60px -20px rgba(0, 0, 0, 0.6); }
-  .dh { display: flex; align-items: center; margin-bottom: 8px; }
-  .dh h2 { margin: 0 auto 0 0; font-size: 19px; font-weight: 800; }
-  .x { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; }
-  .x svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
-  .empty { margin: 0; color: var(--muted); font-size: 13px; }
-  .it { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--border); }
-  .it:hover { border-color: var(--sub); }
-  .it i { flex: none; width: 4px; align-self: stretch; border-radius: 2px; }
-  .tm { flex: none; width: 42px; font-size: 12.5px; font-weight: 600; color: var(--sub); }
-  .b { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .b b { font-size: 13.5px; }
-  .b small { font-size: 11.5px; color: var(--muted); }
-  .old { margin-top: 10px; font-size: 12px; font-weight: 700; color: var(--sub); }
   @media (max-width: 760px) {
     .month { padding: 12px 10px; }
     .chip, .bar { font-size: 9.5px; padding: 0 3px; }
