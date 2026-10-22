@@ -91,6 +91,7 @@
 .lv-gutter { flex: none; position: sticky; left: 0; z-index: 5; background: #fff; }
 .lv-gutter span { position: absolute; left: 6px; top: -6px; font-size: 11px; font-weight: 700; color: #6b7180; }
 .lv-board { position: relative; flex: none; }
+.lv-lane-bg { position: absolute; top: 0; bottom: 0; border-radius: 8px; background: color-mix(in srgb, var(--c) 5%, transparent); pointer-events: none; }
 .lv-hour { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid rgba(20, 22, 28, 0.07); }
 .lv-block { position: absolute; padding: 3px 6px; overflow: hidden; border-radius: 8px; text-align: left;
   font-size: 11.5px; line-height: 15px; font-weight: 700; color: color-mix(in srgb, var(--c) 70%, #000); background: color-mix(in srgb, var(--c) 15%, #fff); }
@@ -214,14 +215,28 @@ body:has(.lv-bar) .toasts { bottom: calc(max(14px, env(safe-area-inset-bottom)) 
   color: #ededed; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
 .live.dark .lv-now { background: #1c1c1c; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
 .live.dark .lv-flow { background: rgba(255, 255, 255, 0.04); }
-.live.dark .lv-board-scroll, .live.dark .lv-corner, .live.dark .lv-gutter, .live.dark .lv-lanes-head { background: #121212; }
-.live.dark .lv-lanes-head span:not(.lv-corner) { background: color-mix(in srgb, var(--c) 22%, #121212); color: color-mix(in srgb, var(--c) 70%, #fff); }
-.live.dark .lv-block:not(.band) { color: #ededed; background: color-mix(in srgb, var(--c) 26%, #121212); box-shadow: 0 0 0 2px #121212; }
-.live.dark .lv-block[data-state='done'] { color: #8be0b8; background: #143326; }
-.live.dark .lv-block[data-state='now'] { background: #1c1c1c; }
-.live.dark .lv-block[data-state='over'] { color: #ff8b7c; background: rgba(255, 90, 60, 0.12); }
-.live.dark .lv-hour { border-color: rgba(255, 255, 255, 0.08); }
-.live.dark .band-head { color: #ededed; background: #2a2a2a; box-shadow: 0 0 0 2px #121212; }
+/* dark board: lanes as tinted columns, blocks with a solid colour edge, 全員 rows as lit bands, clearer hours */
+.live.dark .lv-board-scroll, .live.dark .lv-corner, .live.dark .lv-gutter, .live.dark .lv-lanes-head { background: #141414; }
+.live.dark .lv-lanes-head { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08); }
+.live.dark .lv-lanes-head span:not(.lv-corner) { color: #f2f2f2; background: color-mix(in srgb, var(--c) 30%, #1a1a1a); box-shadow: inset 0 -2px 0 var(--c); }
+.live.dark .lv-lane-bg { background: color-mix(in srgb, var(--c) 7%, transparent); box-shadow: inset 1px 0 0 color-mix(in srgb, var(--c) 22%, transparent); }
+.live.dark .lv-gutter span { color: #9a9a9a; }
+.live.dark .lv-hour { border-color: rgba(255, 255, 255, 0.11); }
+.live.dark .lv-block:not(.band) { color: #fff; background: color-mix(in srgb, var(--c) 38%, #161616); box-shadow: inset 3px 0 0 var(--c), 0 0 0 2px #141414; }
+.live.dark .lv-block[data-state='done'] { color: #9be8c4; background: #163a2b; box-shadow: inset 3px 0 0 #2fbf7f, 0 0 0 2px #141414; }
+.live.dark .lv-block[data-state='now'] { color: #fff; background: color-mix(in srgb, var(--blue) 30%, #161616); box-shadow: inset 0 0 0 2px var(--blue), 0 6px 16px -6px rgba(59, 108, 255, 0.7); }
+.live.dark .lv-block[data-state='over'] { color: #ffa093; background: rgba(255, 90, 60, 0.16); }
+.live.dark .lv-block.band { background: rgba(255, 255, 255, 0.05); box-shadow: inset 3px 0 0 #8a8a8a; }
+.live.dark .lv-block.band[data-state='event'] { background: rgba(18, 184, 176, 0.12); box-shadow: inset 3px 0 0 var(--event); }
+.live.dark .lv-block.band[data-state='now'] { background: rgba(59, 108, 255, 0.14); box-shadow: inset 3px 0 0 var(--blue); }
+.live.dark .lv-block.band[data-state='done'] { background: rgba(47, 191, 127, 0.1); box-shadow: inset 3px 0 0 #2fbf7f; }
+.live.dark .lv-block.band[data-state='over'] { background: rgba(255, 90, 60, 0.1); box-shadow: inset 3px 0 0 #ff5a3c; }
+.live.dark .band-head { color: #fff; background: #3a3a3a; box-shadow: 0 0 0 2px #141414; }
+.live.dark .band-head small { color: #c4c4c4; }
+.live.dark .band-head[data-state='event'] { color: #c9f7f2; background: #135c57; }
+.live.dark .band-head[data-state='done'] { color: #b5f0d3; background: #1d5a40; }
+.live.dark .band-head[data-state='over'] { color: #ffd2ca; background: #6e2a1e; }
+.live.dark .band-head[data-state='now'] small { color: rgba(255, 255, 255, 0.85); }
 .live.dark .lv-bar .primary, .live.dark .ds-actions .primary, .live.dark .lv-days button.on { color: #0a0a0a; background: #ededed; }
 .live.dark .lv-preview { color: #f0c36a; background: rgba(240, 160, 32, 0.12); }
 .live.dark .lv-delay-sheet { color: #ededed; background: rgba(22, 22, 22, 0.97); }

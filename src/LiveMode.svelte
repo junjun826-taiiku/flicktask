@@ -392,6 +392,10 @@
           {/each}
         </div>
         <div class="lv-board" style="width:{canvasW}px; height:{(span.to - span.from) * PX}px" data-testid="live-board">
+          <!-- each 担当 has its own faintly tinted column, so the blocks read as lanes -->
+          {#each lanes as l, i}
+            <div class="lv-lane-bg" style="left:{laneX[i]}px; width:{laneW[i] - 4}px; --c:{COLOR_HEX[l.color]}" aria-hidden="true"></div>
+          {/each}
           {#each Array.from({ length: (span.to - span.from) / 60 + 1 }, (_, i) => span.from + i * 60) as h}
             <div class="lv-hour" style="top:{(h - span.from) * PX}px"></div>
           {/each}
