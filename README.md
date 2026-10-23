@@ -80,3 +80,19 @@ OAuth 同意画面は「本番環境」で公開しており、どの Google ア
 - 所有確認: Google Search Console の URL プレフィックス プロパティ `https://flicktask.junjun-tama.workers.dev/` を HTML ファイルで確認。
   確認ファイル `/googlefa52df59a4a2a0d4.html` は Worker が返します（静的アセットだと `.html` なしの URL へリダイレクトされるため）。消すと確認が外れます。
 - ブランディング: ホームページ `/`、プライバシーポリシー [`/privacy`](public/privacy.html)、利用規約 [`/terms`](public/terms.html)。
+
+## LINE ボット
+
+幹部の LINE グループに入れておくと、毎週月曜 8:00（JST）に「今週のまとめ」を送り、グループで「やること」と送ると期限切れ＋1か月先までの締切を返します（[`worker/line.ts`](worker/line.ts)）。
+
+1. [LINE Developers](https://developers.line.biz/) で Messaging API チャネル（LINE 公式アカウント）を作る
+2. チャネルの「Webhook URL」に `https://flicktask.junjun-tama.workers.dev/line/webhook` を入れて「Webhook の利用」をオン
+3. LINE Official Account Manager の応答設定で「応答メッセージ」をオフ、「グループ・複数人トークへの参加を許可する」をオン
+4. シークレットを登録してデプロイ
+   ```bash
+   npx wrangler secret put LINE_CHANNEL_SECRET        # チャネル基本設定の「チャネルシークレット」
+   npx wrangler secret put LINE_CHANNEL_ACCESS_TOKEN  # Messaging API 設定の「チャネルアクセストークン（長期）」
+   ```
+5. アプリのアカウントメニュー →「LINE連携」で連携コードを出し、グループに「連携 123456」と送る
+
+月曜のまとめは push（無料プランは月 200 通、「通知 × グループ人数」で数える）、それ以外の返事は reply なので数に入りません。

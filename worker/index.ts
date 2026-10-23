@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { isBulleted, stripBullet } from '../src/lib/bullets';
 import type { UserHub } from './hub';
+import { handleWebhook, verifySignature, weeklyPush } from './line';
 export { UserHub } from './hub';
 
 type Env = {
@@ -12,6 +13,11 @@ type Env = {
   GOOGLE_CLIENT_SECRET?: string;
   /** "1" enables /auth/dev-login. Only honoured on localhost; never set in production. */
   DEV_LOGIN?: string;
+  /** LINE Messaging API channel (both set as secrets). Without them the bot is simply off. */
+  LINE_CHANNEL_SECRET?: string;
+  LINE_CHANNEL_ACCESS_TOKEN?: string;
+  /** The app's address, for links in LINE messages sent by the Monday cron (no request to read it from). */
+  APP_URL?: string;
 };
 type User = { id: string; email: string; name: string | null; picture: string | null };
 type Vars = { user: User };
@@ -717,6 +723,64 @@ function coverListItems(memo: string, aiTasks: AiTask[]): { tasks: (AiTask & { r
   return { tasks: out, recovered };
 }
 
+// ---------- LINE ----------
+const devOnly = (c: { env: Env; req: { url: string } }) => c.env.DEV_LOGIN === '1' && isLocalHost(c.req.url);
+
+/** Webhook from the LINE platform. Public, so every call must carry a valid signature. */
+app.post('/line/webhook', async (c) => {
+  const secret = c.env.LINE_CHANNEL_SECRET;
+  if (!secret) return c.json({ error: 'LINE is not configured' }, 503);
+  const raw = await c.req.text();
+  if (!(await verifySignature(secret, raw, c.req.header('x-line-signature')))) return c.json({ error: 'bad signature' }, 401);
+  let body: { events?: unknown[] };
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    return c.json({ error: 'bad json' }, 400);
+  }
+  const replies = await handleWebhook(c.env, (Array.isArray(body.events) ? body.events : []) as never[], new URL('/', c.req.url).toString());
+  // the local test suite reads what the bot said; LINE itself only needs a 200
+  return c.json(devOnly(c) ? { ok: true, replies } : { ok: true });
+});
+/** Local tests only: run the Monday push now. */
+app.post('/line/dev-weekly', async (c) => {
+  if (!devOnly(c)) return c.notFound();
+  return c.json({ sent: await weeklyPush(c.env, new URL('/', c.req.url).toString()) });
+});
+
+/** The app's LINE連携 screen: is the bot set up, and which chats are linked to this account. */
+app.get('/api/line', async (c) => {
+  const { results } = await c.env.DB.prepare('SELECT id, kind, name, weekly, created_at FROM line_links WHERE user_id = ? ORDER BY created_at')
+    .bind(c.get('user').id)
+    .all<{ id: string; kind: string; name: string; weekly: number; created_at: number }>();
+  return c.json({ configured: !!(c.env.LINE_CHANNEL_SECRET && c.env.LINE_CHANNEL_ACCESS_TOKEN), links: results.map((l) => ({ ...l, weekly: !!l.weekly })) });
+});
+/** A one-time code to send in the LINE chat as 「連携 123456」 (10 minutes). */
+app.post('/api/line/code', async (c) => {
+  const user = c.get('user').id;
+  const now = Date.now();
+  const expires_at = now + 10 * 60_000;
+  for (let i = 0; i < 5; i++) {
+    const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000).padStart(6, '0');
+    const res = await c.env.DB.batch([
+      c.env.DB.prepare('DELETE FROM line_codes WHERE expires_at < ? OR user_id = ?').bind(now, user),
+      c.env.DB.prepare('INSERT OR IGNORE INTO line_codes (code, user_id, expires_at) VALUES (?, ?, ?)').bind(code, user, expires_at),
+    ]);
+    if (res[1].meta.changes) return c.json({ code, expires_at });
+  }
+  return c.json({ error: 'try again' }, 503);
+});
+app.patch('/api/line/links/:id', async (c) => {
+  const body = await c.req.json<{ weekly?: unknown }>().catch(() => ({}) as { weekly?: unknown });
+  if (typeof body.weekly !== 'boolean') return c.json({ error: 'bad weekly' }, 400);
+  const r = await c.env.DB.prepare('UPDATE line_links SET weekly = ? WHERE id = ? AND user_id = ?').bind(body.weekly ? 1 : 0, c.req.param('id'), c.get('user').id).run();
+  return r.meta.changes ? c.json({ ok: true }) : c.json({ error: 'not found' }, 404);
+});
+app.delete('/api/line/links/:id', async (c) => {
+  const r = await c.env.DB.prepare('DELETE FROM line_links WHERE id = ? AND user_id = ?').bind(c.req.param('id'), c.get('user').id).run();
+  return r.meta.changes ? c.json({ ok: true }) : c.json({ error: 'not found' }, 404);
+});
+
 // Google Search Console ownership file (needed to list the domain as an OAuth authorized domain).
 // Served by the Worker because static assets would redirect the .html path to an extensionless URL.
 const SITE_VERIFICATION = 'googlefa52df59a4a2a0d4.html';
@@ -734,7 +798,11 @@ async function cleanup(env: Env) {
   ]);
 }
 
+const WEEKLY_CRON = '0 23 * * SUN';
+
 export default {
   fetch: app.fetch,
-  scheduled: (_event: ScheduledController, env: Env, ctx: ExecutionContext) => ctx.waitUntil(cleanup(env)),
+  // 18:00 UTC daily = 03:00 JST housekeeping; 23:00 UTC Sunday = Monday 08:00 JST LINE 今週のまとめ
+  scheduled: (event: ScheduledController, env: Env, ctx: ExecutionContext) =>
+    ctx.waitUntil(event.cron === WEEKLY_CRON ? weeklyPush(env, env.APP_URL ?? 'https://flicktask.junjun-tama.workers.dev/') : cleanup(env)),
 } satisfies ExportedHandler<Env>;

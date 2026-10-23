@@ -21,6 +21,13 @@ test('production: dev login is disabled', async ({ request }) => {
   expect(res.status()).toBe(404);
 });
 
+test('production: the LINE webhook refuses unsigned calls and the test-only push is off', async ({ request }) => {
+  const res = await request.post('/line/webhook', { data: { events: [] } });
+  expect([401, 503]).toContain(res.status()); // 503 until the LINE channel is set up
+  expect((await request.post('/line/dev-weekly')).status()).toBe(404);
+  expect((await request.get('/api/line')).status()).toBe(401);
+});
+
 test('production: API requires a session', async ({ request }) => {
   expect((await request.get('/api/me')).status()).toBe(401);
   expect((await request.get('/api/tasks')).status()).toBe(401);

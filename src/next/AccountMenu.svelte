@@ -1,10 +1,12 @@
 <script lang="ts">
-  // Signed in: avatar → backup export / import and logout. Signed out: the Google login button.
+  // Signed in: avatar → LINE連携, backup export / import and logout. Signed out: the Google login button.
   import { fly } from 'svelte/transition';
   import { store } from '../lib/store.svelte';
   import { toasts } from '../lib/toast.svelte';
+  import LineSettings from './LineSettings.svelte';
 
   let open = $state(false);
+  let lineOpen = $state(false);
   let fileEl = $state<HTMLInputElement>();
   const initial = $derived((store.user?.name || store.user?.email || '?').slice(0, 1).toUpperCase());
 
@@ -34,6 +36,7 @@
       <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
       <div class="menu" role="menu" tabindex="-1" onclick={(e) => e.stopPropagation()} transition:fly={{ y: -6, duration: 160 }}>
         <div class="who"><strong>{store.user.name ?? ''}</strong><span>{store.user.email}</span></div>
+        <button role="menuitem" onclick={() => ((open = false), (lineOpen = true))} data-testid="line">LINE連携</button>
         <button role="menuitem" onclick={() => ((open = false), store.exportBackup())} data-testid="export">データを書き出す</button>
         <button role="menuitem" onclick={() => fileEl?.click()} data-testid="import">データを読み込む</button>
         <button role="menuitem" class="out" onclick={() => store.logout()} data-testid="logout">ログアウト</button>
@@ -41,6 +44,7 @@
     {/if}
     <input bind:this={fileEl} type="file" accept="application/json,.json" hidden onchange={onImport} data-testid="import-file" />
   </div>
+  {#if lineOpen}<LineSettings close={() => (lineOpen = false)} />{/if}
 {:else if store.ready}
   <a class="login nx-chip" href="/auth/google" data-testid="login">
     <svg viewBox="0 0 48 48" width="16" height="16" aria-hidden="true">

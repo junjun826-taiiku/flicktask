@@ -5,8 +5,9 @@
   "compatibility_date": "2026-10-01",
   "assets": {
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/auth/*", "/google*.html"]
+    "run_worker_first": ["/api/*", "/auth/*", "/line/*", "/google*.html"]
   },
+  "vars": { "APP_URL": "https://flicktask.junjun-tama.workers.dev/" },
   "d1_databases": [
     {
       "binding": "DB",
@@ -19,7 +20,7 @@
   // real-time: one UserHub per account relays "data changed" to the user's other devices
   "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "UserHub" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserHub"] }],
-  // daily at 03:00 JST: purge old deletions and expired sessions
-  "triggers": { "crons": ["0 18 * * *"] },
+  // daily at 03:00 JST: purge old deletions and expired sessions; Monday 08:00 JST: LINE 今週のまとめ
+  "triggers": { "crons": ["0 18 * * *", "0 23 * * SUN"] },
   "observability": { "enabled": true }
 }
