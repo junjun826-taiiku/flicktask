@@ -60,7 +60,7 @@
     <h2>LINE連携</h2>
     <button class="x nx-chip" onclick={close} aria-label="閉じる"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
   </div>
-  <p class="lead">幹部のLINEグループにボットを入れておくと、<b>毎週月曜の朝8時</b>に今週の締切と予定のまとめが届きます。グループで「<b>やること</b>」と送ると、1か月分の締切を返します。</p>
+  <p class="lead">幹部のLINEグループにボットを入れておくと、<b>毎週月曜の10時</b>に今週の締切と予定のまとめが届きます。グループで「<b>やること</b>」と送ると、1か月分の締切を返します。</p>
 
   {#if configured === false}
     <p class="warn" data-testid="nx-line-off">LINEのボットがまだ設定されていません（管理者がLINE公式アカウントを用意して、アプリに登録する必要があります）。</p>

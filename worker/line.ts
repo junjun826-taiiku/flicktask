@@ -126,7 +126,7 @@ export const HELP = [
   '・「今週」… 今週のまとめを返します',
   '・「連携 123456」… アプリの「LINE連携」で出したコードでつなぎます',
   '・「連携解除」… このトークとの連携をやめます',
-  '毎週月曜の朝8時に、今週のまとめを送ります。',
+  '毎週月曜の10時に、今週のまとめを送ります。',
 ].join('\n');
 
 // ---------- LINE API ----------
@@ -208,7 +208,7 @@ export async function handleWebhook(env: LineEnv, events: LineEvent[], appUrl: s
            ON CONFLICT(target_id) DO UPDATE SET user_id = excluded.user_id, name = excluded.name`,
         ).bind(crypto.randomUUID(), target, row.user_id, ev.source.type, name, now),
       ]);
-      await say(ev, `Task本部と連携しました ✅\n毎週月曜の朝8時に今週のまとめを送ります。「やること」と送ると1か月分の締切を返します。`);
+      await say(ev, `Task本部と連携しました ✅\n毎週月曜の10時に今週のまとめを送ります。「やること」と送ると1か月分の締切を返します。`);
       continue;
     }
     if (text === '連携解除') {
@@ -235,7 +235,7 @@ export async function handleWebhook(env: LineEnv, events: LineEvent[], appUrl: s
   return replies;
 }
 
-/** Monday 08:00 JST: push 今週のまとめ to every linked chat that wants it (skipped when there is nothing to say). */
+/** Monday 10:00 JST: push 今週のまとめ to every linked chat that wants it (skipped when there is nothing to say). */
 export async function weeklyPush(env: LineEnv, appUrl: string, now = Date.now()) {
   const { results } = await env.DB.prepare('SELECT target_id, user_id FROM line_links WHERE weekly = 1').all<{ target_id: string; user_id: string }>();
   const today = jstToday(now);

@@ -798,11 +798,11 @@ async function cleanup(env: Env) {
   ]);
 }
 
-const WEEKLY_CRON = '0 23 * * SUN';
+const WEEKLY_CRON = '0 1 * * MON';
 
 export default {
   fetch: app.fetch,
-  // 18:00 UTC daily = 03:00 JST housekeeping; 23:00 UTC Sunday = Monday 08:00 JST LINE 今週のまとめ
+  // 18:00 UTC daily = 03:00 JST housekeeping; 01:00 UTC Monday = Monday 10:00 JST LINE 今週のまとめ
   scheduled: (event: ScheduledController, env: Env, ctx: ExecutionContext) =>
     ctx.waitUntil(event.cron === WEEKLY_CRON ? weeklyPush(env, env.APP_URL ?? 'https://flicktask.junjun-tama.workers.dev/') : cleanup(env)),
 } satisfies ExportedHandler<Env>;

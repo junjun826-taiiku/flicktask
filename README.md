@@ -83,7 +83,7 @@ OAuth 同意画面は「本番環境」で公開しており、どの Google ア
 
 ## LINE ボット
 
-幹部の LINE グループに入れておくと、毎週月曜 8:00（JST）に「今週のまとめ」を送り、グループで「やること」と送ると期限切れ＋1か月先までの締切を返します（[`worker/line.ts`](worker/line.ts)）。
+幹部の LINE グループに入れておくと、毎週月曜 10:00（JST）に「今週のまとめ」を送り、グループで「やること」と送ると期限切れ＋1か月先までの締切を返します（[`worker/line.ts`](worker/line.ts)）。
 
 1. [LINE Developers](https://developers.line.biz/) で Messaging API チャネル（LINE 公式アカウント）を作る
 2. チャネルの「Webhook URL」に `https://flicktask.junjun-tama.workers.dev/line/webhook` を入れて「Webhook の利用」をオン
