@@ -14,6 +14,8 @@ export type Task = {
   /** Deadline, local wall-clock. due_time null = end of that day. */
   due_date: string | null;
   due_time: string | null;
+  /** 準備: 着手目安日 (optional). On that day a 未着手 task moves to 進行中. */
+  start_on: string | null;
   /** Scheduled work block, local wall-clock 'YYYY-MM-DD' + 'HH:MM'. */
   plan_date: string | null;
   plan_start: string | null;
@@ -96,13 +98,14 @@ const localToday = () => {
 };
 export type Details = Pick<
   Task,
-  'title' | 'note' | 'due_date' | 'due_time' | 'plan_date' | 'plan_start' | 'plan_end' | 'plan_end_date' | 'status' | 'kind' | 'event_id' | 'roles' | 'place' | 'items' | 'assignees' | 'tag'
+  'title' | 'note' | 'due_date' | 'due_time' | 'start_on' | 'plan_date' | 'plan_start' | 'plan_end' | 'plan_end_date' | 'status' | 'kind' | 'event_id' | 'roles' | 'place' | 'items' | 'assignees' | 'tag'
 >;
 
 const EMPTY_DETAILS = {
   note: '',
   due_date: null,
   due_time: null,
+  start_on: null as string | null,
   plan_date: null,
   plan_start: null,
   plan_end: null,
@@ -300,6 +303,22 @@ class Store {
   }
   setStatus(id: string, status: Status) {
     this.#touch(id, { status });
+  }
+  /**
+   * 着手目安日: a 未着手 task whose start day has come moves to 進行中 — unless it was touched after that day began
+   * (moved back by hand, or the date was just set), so a choice made on the day sticks. Same rule as the server's daily job.
+   */
+  autoStart(today = localToday()) {
+    let n = 0;
+    for (const t of this.tasks) {
+      if (t.deleted || t.kind !== 'task' || t.status !== 'todo' || !t.start_on || t.start_on > today) continue;
+      if (this.eventById(t.event_id)?.closed) continue;
+      const [y, m, d] = t.start_on.split('-').map(Number);
+      if (t.updated_at >= new Date(y, m - 1, d).getTime()) continue;
+      this.#touch(t.id, { status: 'doing' });
+      n++;
+    }
+    return n;
   }
   shift(id: string, dir: 1 | -1) {
     const t = this.tasks.find((x) => x.id === id);
@@ -563,6 +582,9 @@ class Store {
     } catch {
       // offline: keep working from local data
     }
+    this.autoStart();
+    // a tab left open past midnight catches the new day's start dates too
+    setInterval(() => this.autoStart(), 10 * 60_000);
     this.ready = true;
     addEventListener('online', () => this.scheduleSync(0));
     // flush pending saves when the app goes to the background (pulling on return is live.svelte.ts's job)

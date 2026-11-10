@@ -29,7 +29,7 @@ test('month view: event bars across their days, deadlines and 予定 in the cell
   await page.goto('/calendar?m=2026-11-01');
   await expect(page.getByTestId('nx-month-title')).toHaveText('2026年11月');
   await expect(page.getByTestId('nx-month-bar').filter({ hasText: '津田沼祭' })).toHaveCount(2); // Sat 21 and again on the next week row (Sun 22)
-  const cell = (d: string) => page.locator(`[data-date="${d}"]`);
+  const cell = (d: string) => page.locator(`[data-testid="nx-month-cell"][data-date="${d}"]`);
   await expect(cell(at(2026, 11, 10))).toContainText('食品の発注');
   await expect(cell(at(2026, 11, 18))).toContainText('読み合わせ');
   await expect(cell(at(2026, 11, 21))).toContainText('2026 OBOG総会');
@@ -41,7 +41,7 @@ test('month view: event bars across their days, deadlines and 予定 in the cell
 
 test('tapping a day shows its timetable; an event item opens where it lives', async ({ page }) => {
   await page.goto('/calendar?m=2026-11-01');
-  await page.locator('[data-date="2026-11-18"]').click();
+  await page.locator('[data-testid="nx-month-cell"][data-date="2026-11-18"]').click();
   const panel = page.getByTestId('nx-month-day');
   await expect(panel).toContainText('11月18日');
   const block = panel.getByTestId('nx-day-block').filter({ hasText: '読み合わせ' });
@@ -86,7 +86,7 @@ test('a 予定 with no event is added from the calendar, at the clicked time', a
   await expect(sp).toHaveCount(0);
   await expect(panel.getByTestId('nx-day-block').filter({ hasText: 'ゼミ' })).toContainText('15:00–16:00・その他');
   // it shows in the month cell too, and opens again from the timetable
-  await expect(page.locator('[data-date="2026-11-12"]')).toContainText('ゼミ');
+  await expect(page.locator('[data-testid="nx-month-cell"][data-date="2026-11-12"]')).toContainText('ゼミ');
   await panel.getByTestId('nx-day-block').filter({ hasText: 'ゼミ' }).click();
   await expect(page.getByTestId('nx-sched-panel-title')).toHaveValue('ゼミ');
   await page.getByTestId('nx-sched-panel-delete').click();

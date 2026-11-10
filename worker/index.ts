@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { isBulleted, stripBullet } from '../src/lib/bullets';
 import type { UserHub } from './hub';
-import { handleWebhook, verifySignature, weeklyPush } from './line';
+import { handleWebhook, jstToday, verifySignature, weeklyPush } from './line';
 export { UserHub } from './hub';
 
 type Env = {
@@ -165,7 +165,7 @@ app.get('/api/live', (c) => {
 });
 
 const TASK_COLS =
-  'id, title, status, created_at, updated_at, deleted, note, due_date, due_time, plan_date, plan_start, plan_end, kind, plan_end_date, event_id, roles, place, items, assignees, tag';
+  'id, title, status, created_at, updated_at, deleted, note, due_date, due_time, plan_date, plan_start, plan_end, kind, plan_end_date, event_id, roles, place, items, assignees, tag, start_on';
 const EVENT_COLS = 'id, name, start_date, end_date, place, color, roles, members, tags, note, closed, created_at, updated_at, deleted';
 const parseJson = (s: unknown) => {
   try {
@@ -271,6 +271,8 @@ type TaskIn = {
   note?: string;
   due_date?: string | null;
   due_time?: string | null;
+  /** 準備: 着手目安日 */
+  start_on?: string | null;
   plan_date?: string | null;
   plan_start?: string | null;
   plan_end?: string | null;
@@ -322,7 +324,7 @@ function invalid(t: TaskIn): string | null {
   if (typeof t.title !== 'string' || t.title.length > 2000) return 'bad title';
   if (!STATUSES.includes(t.status as any)) return 'bad status';
   if (t.note != null && (typeof t.note !== 'string' || t.note.length > 20000)) return 'bad note';
-  if (!isDate(t.due_date) || !isDate(t.plan_date) || !isDate(t.plan_end_date)) return 'bad date';
+  if (!isDate(t.due_date) || !isDate(t.plan_date) || !isDate(t.plan_end_date) || !isDate(t.start_on)) return 'bad date';
   if (t.plan_end_date && (!t.plan_date || t.plan_end_date < t.plan_date)) return 'bad range';
   if (!isTime(t.due_time) || !isTime(t.plan_start) || !isTime(t.plan_end)) return 'bad time';
   if (t.kind != null && t.kind !== 'task' && t.kind !== 'event') return 'bad kind';
@@ -387,15 +389,15 @@ function upsert(db: D1Database, userId: string, t: TaskIn, now: number) {
     .prepare(
       `INSERT INTO tasks (id, user_id, title, status, created_at, updated_at, deleted,
          note, due_date, due_time, plan_date, plan_start, plan_end, kind, plan_end_date, synced_at,
-         event_id, roles, place, items, assignees, tag)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         event_id, roles, place, items, assignees, tag, start_on)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status,
          updated_at = excluded.updated_at, deleted = excluded.deleted, note = excluded.note,
          due_date = excluded.due_date, due_time = excluded.due_time,
          plan_date = excluded.plan_date, plan_start = excluded.plan_start, plan_end = excluded.plan_end,
          kind = excluded.kind, plan_end_date = excluded.plan_end_date, synced_at = excluded.synced_at,
          event_id = excluded.event_id, roles = excluded.roles, place = excluded.place, items = excluded.items,
-         assignees = excluded.assignees, tag = excluded.tag
+         assignees = excluded.assignees, tag = excluded.tag, start_on = excluded.start_on
        WHERE tasks.user_id = excluded.user_id AND excluded.updated_at > tasks.updated_at`,
     )
     .bind(
@@ -422,6 +424,7 @@ function upsert(db: D1Database, userId: string, t: TaskIn, now: number) {
       t.items ?? '',
       JSON.stringify((t.assignees ?? []).map((r) => r.trim()).filter(Boolean)),
       (t.tag ?? '').trim(),
+      t.start_on ?? null,
     );
 }
 
@@ -788,6 +791,30 @@ app.get(`/${SITE_VERIFICATION}`, (c) => c.html(`google-site-verification: ${SITE
 
 app.all('/api/*', (c) => c.json({ error: 'not found' }, 404));
 
+/**
+ * 着手目安日: a 準備 task still 未着手 on (or after) its start day moves to 進行中 by itself — unless it was touched
+ * after that day began (someone moved it back by hand, or set the date just now): then it is left as it is.
+ * Times are Japan time. The app does the same when it opens, so this covers the days nobody opens it.
+ */
+async function autoStart(env: Env, now = Date.now()) {
+  const today = jstToday(now);
+  // epoch ms of 00:00 JST on start_on
+  const midnight = `((julianday(start_on) - 2440587.5) * 86400000 - ${9 * 3600_000})`;
+  const r = await env.DB.prepare(
+    `UPDATE tasks SET status = 'doing', updated_at = ?1, synced_at = ?1
+     WHERE deleted = 0 AND kind = 'task' AND status = 'todo' AND start_on IS NOT NULL AND start_on <= ?2 AND updated_at < ${midnight}
+       AND (event_id IS NULL OR event_id NOT IN (SELECT id FROM events WHERE user_id = tasks.user_id AND closed = 1))`,
+  )
+    .bind(now, today)
+    .run();
+  return r.meta.changes ?? 0;
+}
+/** Local tests only: run the daily 着手目安日 move now. */
+app.post('/line/dev-autostart', async (c) => {
+  if (!devOnly(c)) return c.notFound();
+  return c.json({ moved: await autoStart(c.env) });
+});
+
 /** Daily housekeeping: purge deletions older than the tombstone TTL and expired sessions. */
 async function cleanup(env: Env) {
   const now = Date.now();
@@ -804,5 +831,5 @@ export default {
   fetch: app.fetch,
   // 18:00 UTC daily = 03:00 JST housekeeping; 01:00 UTC Monday = Monday 10:00 JST LINE 今週のまとめ
   scheduled: (event: ScheduledController, env: Env, ctx: ExecutionContext) =>
-    ctx.waitUntil(event.cron === WEEKLY_CRON ? weeklyPush(env, env.APP_URL ?? 'https://flicktask.junjun-tama.workers.dev/') : cleanup(env)),
+    ctx.waitUntil(event.cron === WEEKLY_CRON ? weeklyPush(env, env.APP_URL ?? 'https://flicktask.junjun-tama.workers.dev/') : Promise.all([cleanup(env), autoStart(env)])),
 } satisfies ExportedHandler<Env>;

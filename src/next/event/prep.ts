@@ -30,9 +30,10 @@ export const STATUS_COLUMNS: { status: Status; label: string }[] = [
 export const memberColor = (e: FEvent | null, name: string) => COLOR_HEX[(e?.members.find((m) => m.name === name)?.color ?? 'gray') as Color];
 
 // ---------- member timeline ----------
-/** A pill runs from today to its deadline. In a row, the next one starts where the previous ends
- *  (one after another, like a queue) as long as that still leaves it two weeks; otherwise it takes a
- *  new row from today. A deadline less than two weeks off only follows on when it loses nothing. */
+/** A pill with a 着手目安日 runs from that day to its deadline, in the first row that is free by then.
+ *  One without runs from today: in a row, the next one starts where the previous ends (one after another,
+ *  like a queue) as long as that still leaves it two weeks; otherwise it takes a new row from today.
+ *  A deadline less than two weeks off only follows on when it loses nothing. */
 export const MIN_PILL_DAYS = 4;
 export const QUEUE_DAYS = 14;
 /** At least this many px per day, so a pill keeps its title readable; a long run-up scrolls sideways. */
@@ -61,6 +62,14 @@ export function lanes(tasks: Task[], e: FEvent | null, members: Member[], today:
       const rowEnds: number[] = [];
       const pills = mine.map(({ t, d }) => {
         const end = Math.max(MIN_PILL_DAYS, dayDiff(from, d) + 1);
+        if (t.start_on) {
+          // fixed start (before the axis: its left edge; after the deadline: a one-day pill on it)
+          const start = Math.max(0, Math.min(dayDiff(from, t.start_on), end - 1));
+          let row = rowEnds.findIndex((x) => x <= start);
+          if (row < 0) (row = rowEnds.length), rowEnds.push(start);
+          rowEnds[row] = end;
+          return { task: t, end, start, row, over: d < today && t.status !== 'done' };
+        }
         // from today; a deadline that is (nearly) here or past still gets a short pill ending on it
         const base = Math.max(0, Math.min(now, end - MIN_PILL_DAYS));
         const need = Math.min(QUEUE_DAYS, end - base);

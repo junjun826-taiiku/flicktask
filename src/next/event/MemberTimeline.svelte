@@ -27,7 +27,7 @@
 
 <div class="legend" aria-hidden="true">
   <span><i class="todo"></i>未着手</span><span><i class="doing"></i>進行中</span><span><i class="done"></i>完了</span><span><i class="over"></i>期限切れ</span>
-  <span class="r">帯は今日から締切まで・色は担当</span>
+  <span class="r">帯は着手目安日（なければ今日）から締切まで・色は担当</span>
 </div>
 <div class="scroll">
   <div class="tl" style="min-width:{Math.max(760, 132 + ax.days * DAY_PX)}px" data-testid="nx-member-timeline">
@@ -57,7 +57,7 @@
                 class:sel={selected === p.task.id}
                 style="top:{8 + p.row * 32}px; left:calc({at(p.start)}% + 2px); width:calc({at(p.end) - at(p.start)}% - 4px); --c:{l.color ?? '#8a8a8a'}"
                 onclick={() => open(p.task.id)}
-                title="{p.task.title}（{md(aimDate(p.task, event) ?? '')}まで）"
+                title="{p.task.title}（{p.task.start_on ? `${md(p.task.start_on)}から` : ''}{md(aimDate(p.task, event) ?? '')}まで）"
                 data-testid="nx-pill"
               ><span>{p.task.title}</span></button>
             {/each}

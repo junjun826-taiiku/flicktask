@@ -4,6 +4,7 @@
   import { cubicOut } from 'svelte/easing';
   import { store, COLOR_HEX, STATUS_LABEL, STATUS_ORDER, type FEvent } from '../../lib/store.svelte';
   import { toasts } from '../../lib/toast.svelte';
+  import { today } from '../../lib/dates';
 
   let { id, event, close }: { id: string; event: FEvent | null; close: () => void } = $props();
   const t = $derived(store.tasks.find((x) => x.id === id && !x.deleted) ?? null);
@@ -21,6 +22,13 @@
     if (!t) return;
     const on = t.assignees.includes(name);
     store.update(t.id, { assignees: on ? t.assignees.filter((x) => x !== name) : [...t.assignees, name] });
+  }
+  /** a start day that has already come means the work is under way */
+  function setStart(v: string | null) {
+    if (!t) return;
+    const moving = !!v && v <= today() && t.status === 'todo';
+    store.update(t.id, { start_on: v, ...(moving ? { status: 'doing' as const } : {}) });
+    if (moving) toasts.show('着手目安日を過ぎているので進行中にしました', { label: '元に戻す', run: () => store.setStatus(id, 'todo') });
   }
   function remove() {
     if (!t) return;
@@ -57,13 +65,20 @@
 
     <div class="two">
       <label class="f">
-        <span class="l">期限</span>
+        <span class="l">締切日</span>
         <input type="date" value={t.due_date ?? ''} onchange={(e) => store.update(t.id, { due_date: e.currentTarget.value || null })} data-testid="nx-panel-due" />
       </label>
       <label class="f">
-        <span class="l">時刻</span>
+        <span class="l">締切時刻</span>
         <input type="time" value={t.due_time ?? ''} disabled={!t.due_date} onchange={(e) => store.update(t.id, { due_time: e.currentTarget.value || null })} data-testid="nx-panel-time" />
       </label>
+    </div>
+    <div class="two">
+      <label class="f">
+        <span class="l">着手目安日<small>（任意）</small></span>
+        <input type="date" value={t.start_on ?? ''} max={t.due_date ?? undefined} onchange={(e) => setStart(e.currentTarget.value || null)} data-testid="nx-panel-start" />
+      </label>
+      <p class="hint">{t.start_on && t.due_date && t.start_on > t.due_date ? '締切より後になっています' : 'この日になると、未着手なら進行中に移ります'}</p>
     </div>
 
     {#if people.length}
@@ -105,6 +120,8 @@
   .f { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .f.grow { flex: 1; }
   .l { font-size: 12px; font-weight: 700; color: var(--muted); }
+  .l small { font-weight: 500; }
+  .hint { align-self: end; margin: 0 0 4px; font-size: 11.5px; line-height: 1.5; color: var(--muted); }
   .seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 3px; border-radius: 10px; }
   .seg button { height: 32px; border-radius: 8px; font-size: 12.5px; font-weight: 700; color: var(--sub); }
   .seg button.on { color: var(--text); background: var(--hi); }

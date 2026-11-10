@@ -123,6 +123,7 @@
           >
             <span class="t">{t.title}</span>
             <span class="meta">
+              {#if t.start_on && t.status === 'todo'}<span class="start" title="着手目安日" data-testid="nx-card-start">{md(t.start_on)}〜</span>{/if}
               <span class="due" class:over={d.over}>{d.text}</span>
               {#if t.note}<span class="note" title="メモあり">メモ</span>{/if}
               <span class="people">
@@ -159,6 +160,8 @@
   .meta { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
   .due { height: 22px; padding: 0 8px; border-radius: 999px; display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; color: var(--sub); border: 1.3px dashed var(--muted); white-space: nowrap; }
   .due.over { color: var(--over-text); border-color: rgba(255, 107, 91, 0.8); }
+  /* 着手目安日, shown while the task hasn't started: "1/5〜" then the deadline */
+  .start { height: 22px; padding: 0 8px; border-radius: 999px; display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; color: var(--sub); background: var(--chip); white-space: nowrap; }
   .note { font-size: 10.5px; font-weight: 700; color: var(--muted); padding: 1px 6px; border-radius: 6px; background: var(--chip); }
   .people { margin-left: auto; display: flex; }
   .av { width: 22px; height: 22px; margin-left: -5px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 10.5px; font-weight: 800; color: #fff; box-shadow: 0 0 0 2px var(--ring); }
