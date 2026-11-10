@@ -62,6 +62,11 @@
     const t = store.add('新しい予定', Date.now(), { kind: 'event', event_id: null, plan_date: day, plan_start: fromMin(at), plan_end: fromMin(Math.min(at + 60, 23 * 60 + 59)) });
     if (t) selected = t.id;
   }
+  /** 終日: a 予定 with a day but no time */
+  function addAllDay() {
+    const t = store.add('新しい予定', Date.now(), { kind: 'event', event_id: null, plan_date: day });
+    if (t) selected = t.id;
+  }
   function addAt(e: MouseEvent) {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     add(Math.min(Math.floor(((e.clientY - r.top) / H) * 2) * 30, 23 * 60)); // snap to 30 min
@@ -82,14 +87,18 @@
     </div>
     <button class="x nx-chip" onclick={close} aria-label="閉じる"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
   </div>
-  <button class="add" onclick={() => add(null)} data-testid="nx-day-add">＋ 予定を追加</button>
+  <div class="adds">
+    <button class="add" onclick={() => add(null)} data-testid="nx-day-add">＋ 予定を追加</button>
+    <button class="add sub" onclick={addAllDay} data-testid="nx-day-add-allday">＋ 終日の予定</button>
+  </div>
 
   {#key day}
     <div class="body" in:fly={{ x: 40 * dir, duration: 300, easing: cubicOut }}>
-      {#if meets.length || top.plans.length || top.dues.length}
-        <div class="allday" data-testid="nx-day-allday">
+      <!-- 終日 row is always there: its empty space adds an all-day 予定, like the hours below -->
+      <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+      <div class="allday" data-testid="nx-day-allday">
           <span class="lab">終日</span>
-          <div class="ads">
+          <div class="ads" onclick={(e) => e.target === e.currentTarget && addAllDay()} data-testid="nx-day-allday-add" class:empty={!(meets.length || top.plans.length || top.dues.length)} title="クリックで終日の予定を追加">
             {#each meets as m (m.id)}
               <a class="ad meet" href="/events/{m.id}" style="--c:{COLOR_HEX[m.color]}" data-testid="nx-month-day-item">{m.name}</a>
             {/each}
@@ -101,8 +110,7 @@
               <button class="ad due" onclick={() => open(t, 'due')} data-testid="nx-month-day-item">締切・{t.title}<small>{label(t)}</small></button>
             {/each}
           </div>
-        </div>
-      {/if}
+      </div>
 
       <div class="scroll" bind:this={scroller} data-testid="nx-day-timeline">
         <div class="tl" style="height:{24 * H}px">
@@ -157,7 +165,11 @@
   .step button:hover { background: var(--hi); }
   .step svg, .x svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
   .x { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; }
-  .add { align-self: flex-start; height: 36px; padding: 0 14px; border-radius: 11px; font-size: 13px; font-weight: 800; color: var(--bg); background: var(--text); }
+  .adds { display: flex; gap: 8px; }
+  .add.sub { color: var(--text); background: var(--chip); border: 1px solid var(--border); }
+  .ads { cursor: cell; min-height: 26px; }
+  .ads.empty::after { content: 'クリックで終日の予定を追加'; display: block; padding-top: 5px; font-size: 11.5px; color: var(--muted); pointer-events: none; }
+  .add { height: 36px; padding: 0 14px; border-radius: 11px; font-size: 13px; font-weight: 800; color: var(--bg); background: var(--text); }
   .body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .allday { display: flex; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
   .lab { flex: none; width: 40px; padding-top: 4px; font-size: 11px; font-weight: 700; color: var(--muted); }

@@ -6,10 +6,10 @@
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { store, COLORS, COLOR_HEX, COLOR_NAME, type Color, type FEvent } from '../../lib/store.svelte';
-  import { addDays, today } from '../../lib/dates';
+  import { addDays, rangeLabel, today } from '../../lib/dates';
   import { toasts } from '../../lib/toast.svelte';
   import { nav } from '../nav.svelte';
-  import { carryable, moveCopy, nextName, prepCopy } from './carry';
+  import { byFiscalYear, carryable, moveCopy, nextName, prepCopy } from './carry';
 
   let { id }: { id: string } = $props();
   const isNew = id === 'new';
@@ -31,8 +31,9 @@
   let err = $state('');
   $effect(() => void (isNew && nameEl?.focus()));
 
-  // ---------- 過去のイベントから作る ----------
-  const pastChoices = untrack(() => [...store.liveEvents].sort((a, b) => b.start_date.localeCompare(a.start_date)));
+  // ---------- 過去のイベントから作る (the events in 過去資料, by 年度) ----------
+  const pastYears = untrack(() => byFiscalYear(store.liveEvents.filter((e) => e.closed)));
+  let pickerOpen = $state(false);
   let fromId = $state('');
   const from = $derived(fromId ? store.eventById(fromId) : null);
   let loading = $state(false);
@@ -42,6 +43,7 @@
   const picked = <T extends { id: string }>(list: T[]) => list.filter((t) => !skip[t.id]);
   const setAll = (list: { id: string }[], on: boolean) => list.forEach((t) => (skip[t.id] = !on));
   async function choose(id: string) {
+    pickerOpen = false;
     fromId = id;
     skip = {};
     const e = store.eventById(id);
@@ -135,7 +137,7 @@
   const close = () => (nav.editing = null);
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && close()} />
+<svelte:window onkeydown={(e) => e.key === 'Escape' && (pickerOpen ? (pickerOpen = false) : close())} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <div class="scrim" onclick={close} transition:fade={{ duration: 180 }}></div>
@@ -147,15 +149,36 @@
   </div>
 
   <div class="body">
-    {#if isNew && pastChoices.length}
+    {#if isNew && pastYears.length}
       <section class="carry" data-testid="nx-carry">
-        <label class="f">
-          <span class="l">過去のイベントから作る</span>
-          <select value={fromId} onchange={(e) => choose(e.currentTarget.value)} data-testid="nx-carry-from">
-            <option value="">使わない（空から作る）</option>
-            {#each pastChoices as p (p.id)}<option value={p.id}>{p.name}（{p.start_date.replaceAll('-', '/')}）</option>{/each}
-          </select>
-        </label>
+        <div class="f">
+          <span class="l">過去資料から作る</span>
+          <div class="picker">
+            <button class="pick" class:open={pickerOpen} onclick={() => (pickerOpen = !pickerOpen)} aria-haspopup="listbox" aria-expanded={pickerOpen} data-testid="nx-carry-from">
+              {#if from}
+                <i style="background:{COLOR_HEX[from.color]}"></i><b>{from.name}</b><small>{rangeLabel(from.start_date, from.end_date)}</small>
+              {:else}
+                <span class="none">使わない（空から作る）</span>
+              {/if}
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+            </button>
+            {#if pickerOpen}
+              <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+              <div class="pick-scrim" onclick={() => (pickerOpen = false)}></div>
+              <div class="menu" role="listbox" aria-label="過去資料" transition:fly={{ y: -6, duration: 160 }}>
+                <button role="option" aria-selected={!fromId} class:on={!fromId} onclick={() => choose('')}><span class="none">使わない（空から作る）</span></button>
+                {#each pastYears as y (y.year)}
+                  <span class="yr">{y.year}年度</span>
+                  {#each y.events as p (p.id)}
+                    <button role="option" aria-selected={fromId === p.id} class:on={fromId === p.id} onclick={() => choose(p.id)} data-testid="nx-carry-option">
+                      <i style="background:{COLOR_HEX[p.color]}"></i><b>{p.name}</b><small>{rangeLabel(p.start_date, p.end_date)}</small>
+                    </button>
+                  {/each}
+                {/each}
+              </div>
+            {/if}
+          </div>
+        </div>
         {#if from}
           <p class="note">準備タスクと当日の動きを引き継ぎます。準備タスクの日付・担当は空、状態は未着手になります。予定とイベント担当は引き継ぎません。</p>
           {#if loading}
@@ -264,7 +287,8 @@
   input:focus { border-color: var(--accent); }
   input.big { font-size: 18px; font-weight: 800; }
   .err { grid-column: 1 / -1; margin: -4px 0 0; font-size: 12px; color: var(--over-text); }
-  .swatches { display: grid; grid-template-columns: repeat(15, minmax(0, 1fr)); gap: 6px; max-width: 520px; }
+  /* padding: room for the selected ring, which the scrolling body would otherwise clip at the left edge */
+  .swatches { display: grid; grid-template-columns: repeat(15, minmax(0, 1fr)); gap: 6px; max-width: 530px; padding: 5px; }
   .swatches button { aspect-ratio: 1; width: 100%; border-radius: 50%; }
   .swatches button.on { box-shadow: 0 0 0 2px var(--ring), 0 0 0 4px var(--text); }
   .sh { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
@@ -283,7 +307,24 @@
   .add { align-self: flex-start; height: 36px; margin-top: 4px; padding: 0 14px; border-radius: 10px; font-size: 13px; font-weight: 700; color: var(--sub); border: 1px dashed var(--border); }
   .note { margin: 6px 0 0; font-size: 11.5px; color: var(--muted); }
   .carry { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--border); }
-  select { height: 42px; width: 100%; padding: 0 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--chip); color: var(--text); font: 600 14px var(--font); outline: 0; color-scheme: inherit; }
+  .picker { position: relative; }
+  .pick, .menu button { width: 100%; display: flex; align-items: center; gap: 9px; text-align: left; }
+  .pick { height: 44px; padding: 0 12px; border-radius: 11px; border: 1px solid var(--border); background: var(--chip); transition: border-color 0.15s; }
+  .pick:hover, .pick.open { border-color: var(--sub); }
+  .pick svg { flex: none; margin-left: auto; width: 16px; height: 16px; fill: none; stroke: var(--muted); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.2s; }
+  .pick.open svg { transform: rotate(180deg); }
+  .pick i, .menu i { flex: none; width: 9px; height: 9px; border-radius: 50%; }
+  .pick b, .menu b { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; font-weight: 800; }
+  .pick small, .menu small { flex: none; font-size: 12px; color: var(--muted); }
+  .menu small { margin-left: auto; }
+  .none { font-size: 13.5px; font-weight: 700; color: var(--sub); }
+  .pick-scrim { position: fixed; inset: 0; z-index: 1; }
+  .menu { position: absolute; z-index: 2; top: calc(100% + 6px); left: 0; right: 0; max-height: 320px; overflow-y: auto; padding: 6px; border-radius: 14px; display: flex; flex-direction: column; gap: 1px;
+    background: var(--drawer); border: 1px solid var(--border); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); box-shadow: 0 24px 48px -16px rgba(0, 0, 0, 0.6); }
+  .menu button { min-height: 38px; padding: 0 10px; border-radius: 9px; }
+  .menu button:hover { background: var(--hi); }
+  .menu button.on { background: var(--hi); box-shadow: inset 2px 0 0 var(--text); }
+  .yr { padding: 10px 10px 4px; font-size: 11.5px; font-weight: 800; color: var(--muted); }
   .carry .note { margin: 0; }
   .cgh { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; font-size: 13px; }
   .cgh span { font-size: 12px; color: var(--muted); }

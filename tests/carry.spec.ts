@@ -56,7 +56,12 @@ test('a new event made from last year carries 準備 tasks fresh and 当日の�
   await page.goto('/');
   await expect(page.getByTestId('nx-timeline')).toBeVisible();
   await page.getByTestId((await page.getByTestId('nx-new-event').isVisible()) ? 'nx-new-event' : 'nx-new-event-phone').click();
-  await page.getByTestId('nx-carry-from').selectOption('obog25');
+  // the picker lists 過去資料 by 年度
+  await page.getByTestId('nx-carry-from').click();
+  await expect(page.getByTestId('nx-carry')).toContainText('2025年度');
+  await expect(page.getByTestId('nx-carry-option')).toHaveCount(3);
+  await page.getByTestId('nx-carry-option').filter({ hasText: '2025 OBOG総会' }).click();
+  await expect(page.getByTestId('nx-carry-from')).toContainText('2025 OBOG総会');
   await expect(page.getByTestId('nx-editor-name')).toHaveValue('2026 OBOG総会');
   await expect(page.getByTestId('nx-editor-place')).toHaveValue('5号館');
   await expect(page.getByTestId('nx-editor-role')).toHaveCount(1);

@@ -129,3 +129,28 @@ test('addresses from before the redesign still land on the right screen', async 
   await page.goto('/events');
   await expect(page.getByTestId('nx-timeline')).toBeVisible();
 });
+
+test('an all-day 予定 from the calendar: the 終日 button or the 終日 row, and the 終日 switch', async ({ page }) => {
+  await page.goto('/calendar?m=2026-11-01&d=2026-11-13');
+  const panel = page.getByTestId('nx-month-day');
+  await panel.getByTestId('nx-day-add-allday').click();
+  const sp = page.getByTestId('nx-sched-panel');
+  await expect(page.getByTestId('nx-sched-panel-allday')).toBeChecked();
+  await expect(page.getByTestId('nx-sched-panel-start')).toHaveCount(0); // no time while 終日
+  await page.getByTestId('nx-sched-panel-title').fill('健康診断');
+  await page.getByTestId('nx-sched-panel-title').press('Enter');
+  await page.keyboard.press('Escape');
+  await expect(sp).toHaveCount(0);
+  await expect(panel.getByTestId('nx-day-allday')).toContainText('健康診断');
+  await expect(panel.getByTestId('nx-day-block').filter({ hasText: '健康診断' })).toHaveCount(0);
+  // switching 終日 off gives it a time on the timetable
+  await panel.getByTestId('nx-month-day-item').filter({ hasText: '健康診断' }).click();
+  await page.getByTestId('nx-sched-panel-allday').uncheck();
+  await expect(page.getByTestId('nx-sched-panel-start')).toHaveValue('10:00');
+  await page.keyboard.press('Escape');
+  await expect(panel.getByTestId('nx-day-block').filter({ hasText: '健康診断' })).toContainText('10:00–11:00');
+  // the empty 終日 row of another day adds one too
+  await panel.getByTestId('nx-day-next').click();
+  await panel.getByTestId('nx-day-allday-add').click();
+  await expect(page.getByTestId('nx-sched-panel-allday')).toBeChecked();
+});

@@ -64,10 +64,20 @@
       </div>
     </div>
 
-    <div class="three">
+    <div class="three" class:allday={!t.plan_start}>
       <label class="f"><span class="l">日付</span><input type="date" value={t.plan_date ?? ''} onchange={(e) => e.currentTarget.value && store.update(t.id, { plan_date: e.currentTarget.value })} data-testid="nx-sched-panel-date" /></label>
-      <label class="f"><span class="l">開始</span><input type="time" value={t.plan_start ?? ''} onchange={(e) => store.update(t.id, { plan_start: e.currentTarget.value || null, ...(e.currentTarget.value ? {} : { plan_end: null }) })} data-testid="nx-sched-panel-start" /></label>
-      <label class="f"><span class="l">終了</span><input type="time" value={t.plan_end ?? ''} disabled={!t.plan_start} onchange={(e) => store.update(t.id, { plan_end: e.currentTarget.value || null })} /></label>
+      {#if t.plan_start}
+        <label class="f"><span class="l">開始</span><input type="time" value={t.plan_start ?? ''} onchange={(e) => store.update(t.id, { plan_start: e.currentTarget.value || null, ...(e.currentTarget.value ? {} : { plan_end: null }) })} data-testid="nx-sched-panel-start" /></label>
+        <label class="f"><span class="l">終了</span><input type="time" value={t.plan_end ?? ''} onchange={(e) => store.update(t.id, { plan_end: e.currentTarget.value || null })} /></label>
+      {/if}
+      <!-- 終日 = a day with no time; turning it off gives a 10:00–11:00 slot to adjust -->
+      <label class="f tog-f">
+        <span class="l">終日</span>
+        <span class="tog" class:on={!t.plan_start}>
+          <input type="checkbox" checked={!t.plan_start} onchange={(e) => store.update(t.id, e.currentTarget.checked ? { plan_start: null, plan_end: null } : { plan_start: '10:00', plan_end: '11:00' })} data-testid="nx-sched-panel-allday" />
+          <i></i>
+        </span>
+      </label>
     </div>
     <label class="f"><span class="l">場所・参加</span><input value={t.place} onchange={(e) => store.update(t.id, { place: e.currentTarget.value.trim() })} placeholder="幹部全員・2号館3階など" data-testid="nx-sched-panel-place" /></label>
     <label class="f grow">
@@ -101,7 +111,16 @@
   .tags button.on { color: var(--text); border-color: var(--c); background: color-mix(in srgb, var(--c) 18%, transparent); }
   .tags .make { color: var(--muted); border-style: dashed; }
   .newtag { width: 140px; height: 32px; }
-  .three { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 10px; }
+  .three { display: grid; grid-template-columns: 1.4fr 1fr 1fr auto; gap: 10px; }
+  .three.allday { grid-template-columns: 1fr auto; }
+  /* 終日 switch */
+  .tog-f { align-items: center; }
+  .tog { position: relative; width: 44px; height: 40px; display: grid; place-items: center; cursor: pointer; }
+  .tog input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+  .tog i { width: 40px; height: 24px; border-radius: 999px; background: var(--chip); border: 1px solid var(--border); position: relative; transition: background 0.2s; pointer-events: none; }
+  .tog i::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--sub); transition: transform 0.2s, background 0.2s; }
+  .tog.on i { background: var(--accent); border-color: var(--accent); }
+  .tog.on i::after { transform: translateX(16px); background: #fff; }
   input { height: 40px; width: 100%; padding: 0 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--chip); color: var(--text); font: 600 13.5px var(--font); outline: 0; color-scheme: inherit; }
   input:disabled { opacity: 0.45; }
   input:focus, .memo-field:focus { border-color: var(--accent); }
