@@ -73,12 +73,30 @@ export function upcomingTasks(tasks: Task[], eventById: (id: string | null) => F
     .map((x) => ({ ...x, over: x.date < today }))
     .sort((a, b) => a.date.localeCompare(b.date) || (a.task.due_time ?? '99').localeCompare(b.task.due_time ?? '99') || a.task.created_at - b.task.created_at);
 }
-export type WeekGroup = { key: string; event: FEvent | null; items: WeekItem[] };
+/** How far ahead 「もうすぐ着手」 looks. */
+export const SOON_DAYS = 7;
+/** 未着手 tasks whose 着手目安日 is within a week (or already past but put back by hand), soonest start first. `date` = 着手目安日. */
+export function startingSoon(tasks: Task[], eventById: (id: string | null) => FEvent | null, today: string, days = SOON_DAYS): WeekItem[] {
+  const until = addDays(today, days);
+  return tasks
+    .filter((t) => !t.deleted && t.kind === 'task' && t.status === 'todo' && !!t.start_on && t.start_on <= until)
+    .map((t) => ({ task: t, event: eventById(t.event_id), date: t.start_on!, over: t.start_on! < today }))
+    .filter((x) => !x.event?.closed)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.task.created_at - b.task.created_at);
+}
+/** items = 締切が1か月以内, soon = 着手目安日が1週間以内の未着手 */
+export type WeekGroup = { key: string; event: FEvent | null; items: WeekItem[]; soon: WeekItem[] };
 /** Group by event in sidebar order; tasks with no event go last under 「その他」. */
-export function byEvent(items: WeekItem[], order: FEvent[]): WeekGroup[] {
-  const groups: WeekGroup[] = order.map((e) => ({ key: e.id, event: e, items: items.filter((x) => x.event?.id === e.id) }));
-  const rest = items.filter((x) => !x.event || !order.some((e) => e.id === x.event!.id));
-  return [...groups, { key: 'other', event: null, items: rest }].filter((g) => g.items.length);
+export function byEvent(items: WeekItem[], order: FEvent[], soon: WeekItem[] = []): WeekGroup[] {
+  const mine = (list: WeekItem[], e: FEvent) => list.filter((x) => x.event?.id === e.id);
+  const rest = (list: WeekItem[]) => list.filter((x) => !x.event || !order.some((e) => e.id === x.event!.id));
+  const groups: WeekGroup[] = order.map((e) => ({ key: e.id, event: e, items: mine(items, e), soon: mine(soon, e) }));
+  return [...groups, { key: 'other', event: null, items: rest(items), soon: rest(soon) }].filter((g) => g.items.length || g.soon.length);
+}
+/** Label for a 着手目安日: 「今日から」「あと3日」, or the day when it has passed. */
+export function soonLabel(start: string, today: string) {
+  const n = dayDiff(today, start);
+  return n < 0 ? `${Number(start.slice(5, 7))}/${Number(start.slice(8))}から（過ぎています）` : n === 0 ? '今日から' : `あと${n}日`;
 }
 
 // ---------- 直近の予定 ----------

@@ -118,13 +118,14 @@ test.describe('new home', () => {
           { ...base, id: 'w2', title: '出店申請', event_id: 'ev2', due_date: p.today },
           { ...base, id: 'w3', title: '再来月の準備', event_id: 'ev2', due_date: p.d45 },
           { ...base, id: 'w5', title: '3週間後の締切', event_id: 'ev2', due_date: p.d20 },
+          { ...base, id: 'w6', title: '看板の制作', event_id: 'ev2', due_date: p.d45, start_on: p.d3 }, // starts soon, due beyond the month
           { ...base, id: 'w4', title: '個人の締切', event_id: null, due_date: p.today },
           { ...base, id: 's1', title: '幹部読み合わせ', kind: 'event', event_id: 'ev1', plan_date: p.d1, plan_start: '19:00', tag: '幹部読み合わせ' },
         );
         localStorage.setItem('ft.tasks.v1', JSON.stringify(tasks));
         localStorage.setItem('home-seeded', '1');
       },
-      { today: plus(0), dm2: plus(-2), d1: plus(1), d20: plus(20), d40: plus(40), d41: plus(41), d45: plus(45) },
+      { today: plus(0), dm2: plus(-2), d1: plus(1), d20: plus(20), d40: plus(40), d41: plus(41), d45: plus(45), d3: plus(3) },
     );
   });
 
@@ -134,7 +135,7 @@ test.describe('new home', () => {
     await expect(rows).toHaveCount(2);
     const obog = rows.filter({ hasText: '2026 OBOG総会' });
     // w1 is overdue (2 days ago); it is drawn red unless it falls before this week's Monday
-    await expect(rows.filter({ hasText: '津田沼祭' }).getByTestId('nx-tl-due')).toHaveCount(3);
+    await expect(rows.filter({ hasText: '津田沼祭' }).getByTestId('nx-tl-due')).toHaveCount(4);
     await obog.click();
     await expect(page).toHaveURL(/\/events\/ev1$/);
     await expect(page.getByTestId('nx-event-title')).toContainText('2026 OBOG総会');
@@ -142,18 +143,33 @@ test.describe('new home', () => {
     await expect(page.getByTestId('nx-timeline')).toBeVisible();
   });
 
-  test('やること: the coming month grouped by event (その他 last), or one list by deadline; the choice is remembered', async ({ page }) => {
+  test('やること: event groups fold; opened, 締切が1か月以内 and 着手目安日が1週間以内の未着手; the choice is remembered', async ({ page }) => {
     await page.goto('/');
     const week = page.getByTestId('nx-week');
     const groups = week.getByTestId('nx-week-group');
     await expect(groups).toHaveCount(3);
-    await expect(groups.nth(0)).toContainText('2026 OBOG総会');
-    await expect(groups.nth(0)).toContainText('期限切れ');
-    await expect(groups.nth(2)).toContainText('その他');
-    await expect(groups.nth(2)).toContainText('個人の締切');
     await expect(week.locator('h2')).toHaveText('やること');
-    await expect(groups.nth(1)).toContainText('3週間後の締切'); // within the month
+    // folded: name and counts only
+    await expect(groups.nth(0)).toContainText('2026 OBOG総会');
+    await expect(groups.nth(0)).toContainText('期限切れ 1');
+    await expect(week.getByTestId('nx-week-row')).toHaveCount(0);
+    await expect(groups.nth(1)).toContainText('締切 2件');
+    await expect(groups.nth(1)).toContainText('もうすぐ着手 1件');
+    await expect(groups.nth(2)).toContainText('その他');
+    // open 津田沼祭: two lists
+    await groups.nth(1).getByTestId('nx-week-group-toggle').click();
+    await expect(groups.nth(1).getByTestId('nx-week-due-list')).toContainText('3週間後の締切'); // within the month
+    await expect(groups.nth(1).getByTestId('nx-week-soon-list')).toContainText('看板の制作');
+    await expect(groups.nth(1).getByTestId('nx-week-soon-row')).toContainText('あと3日');
+    await expect(groups.nth(1).getByTestId('nx-week-due-list')).not.toContainText('看板の制作'); // its deadline is beyond the month
     await expect(week).not.toContainText('再来月の準備'); // beyond a month
+    // the open group is remembered; tapping again folds it
+    await page.reload();
+    await expect(page.getByTestId('nx-week-group').nth(1).getByTestId('nx-week-soon-list')).toBeVisible();
+    await page.getByTestId('nx-week-group').nth(1).getByTestId('nx-week-group-toggle').click();
+    await expect(page.getByTestId('nx-week-soon-list')).toHaveCount(0);
+    await page.getByTestId('nx-week-group').nth(2).getByTestId('nx-week-group-toggle').click();
+    await expect(page.getByTestId('nx-week-group').nth(2)).toContainText('個人の締切');
     await expect(week).not.toContainText('個人のメモ'); // no date
 
     await page.getByTestId('nx-week-by-due').click();
@@ -165,6 +181,7 @@ test.describe('new home', () => {
 
   test('checking a task off completes it, with undo', async ({ page }) => {
     await page.goto('/');
+    await page.getByTestId('nx-week-group').filter({ hasText: '津田沼祭' }).getByTestId('nx-week-group-toggle').click();
     const row = page.getByTestId('nx-week-row').filter({ hasText: '出店申請' });
     await row.getByTestId('nx-week-check').click();
     await expect(row).toHaveCount(0);

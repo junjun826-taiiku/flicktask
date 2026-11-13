@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { fade } from 'svelte/transition';
+  import { fade, slide } from 'svelte/transition';
   import { store, COLOR_HEX, type Task, type FEvent } from '../lib/store.svelte';
   import { toasts } from '../lib/toast.svelte';
   import { addDays, daysUntil, today as todayFn, weekday } from '../lib/dates';
-  import { byEvent, monthAhead, upcomingTasks, type WeekItem } from './home';
+  import { byEvent, monthAhead, soonLabel, startingSoon, SOON_DAYS, upcomingTasks, type WeekItem } from './home';
 
-  // やること: overdue and the coming month, grouped by event (v2: everyone starts on イベント別 again)
+  // やること: overdue and the coming month, grouped by event (v2: everyone starts on イベント別 again).
+  // Each event folds up; opened, it shows 締切が1か月以内 and 着手目安日が1週間以内の未着手.
   const KEY = 'ft.weekMode.v2';
   const today = todayFn();
   const until = monthAhead(today);
@@ -25,7 +26,25 @@
   }
 
   const items = $derived(upcomingTasks(store.tasks, (id) => store.eventById(id), today, until));
-  const groups = $derived(byEvent(items, store.activeEvents));
+  const soon = $derived(startingSoon(store.tasks, (id) => store.eventById(id), today));
+  const groups = $derived(byEvent(items, store.activeEvents, soon));
+
+  // which groups are open, remembered on this device (all folded at first)
+  const OPEN_KEY = 'ft.weekOpen.v1';
+  let open = $state<Record<string, boolean>>(loadOpen());
+  function loadOpen(): Record<string, boolean> {
+    try {
+      return Object.fromEntries((JSON.parse(localStorage.getItem(OPEN_KEY) ?? '[]') as string[]).map((k) => [k, true]));
+    } catch {
+      return {};
+    }
+  }
+  function toggle(key: string) {
+    open[key] = !open[key];
+    try {
+      localStorage.setItem(OPEN_KEY, JSON.stringify(Object.keys(open).filter((k) => open[k])));
+    } catch {}
+  }
   const md = (s: string) => `${Number(s.slice(5, 7))}/${Number(s.slice(8))}`;
   const dueLabel = (x: WeekItem) => (x.over ? `期限切れ ${md(x.date)}` : x.date === today ? '今日' : x.date === addDays(today, 1) ? '明日' : `${md(x.date)}(${weekday(x.date)})`);
   const memberColor = (e: FEvent | null, name: string) => COLOR_HEX[e?.members.find((m) => m.name === name)?.color ?? 'gray'];
@@ -37,8 +56,8 @@
   }
 </script>
 
-{#snippet row(x: WeekItem, showEvent: boolean)}
-  <div class="row" out:fade={{ duration: 200 }} data-testid="nx-week-row">
+{#snippet row(x: WeekItem, showEvent: boolean, starting = false)}
+  <div class="row" out:fade={{ duration: 200 }} data-testid={starting ? 'nx-week-soon-row' : 'nx-week-row'}>
     <button class="check" onclick={() => done(x.task)} aria-label="「{x.task.title}」を完了にする" data-testid="nx-week-check"></button>
     <span class="title">{x.task.title}</span>
     {#if x.task.assignees.length}
@@ -49,7 +68,11 @@
     {#if showEvent}
       <span class="tag"><i style="background:{x.event ? COLOR_HEX[x.event.color] : 'var(--muted)'}"></i>{x.event?.name ?? 'その他'}</span>
     {/if}
-    <span class="due" class:over={x.over}>{dueLabel(x)}</span>
+    {#if starting}
+      <span class="soon" class:over={x.over}>{soonLabel(x.date, today)}</span>
+    {:else}
+      <span class="due" class:over={x.over}>{dueLabel(x)}</span>
+    {/if}
   </div>
 {/snippet}
 
@@ -62,18 +85,43 @@
       <button class:on={mode === 'due'} aria-pressed={mode === 'due'} onclick={() => setMode('due')} data-testid="nx-week-by-due">締切順</button>
     </div>
   </div>
-  {#if items.length === 0}
+  {#if mode === 'event' ? groups.length === 0 : items.length === 0}
     <p class="empty" data-testid="nx-week-empty">1か月以内の締切はありません</p>
   {:else if mode === 'event'}
     <div class="groups">
       {#each groups as g (g.key)}
         {@const color = g.event ? COLOR_HEX[g.event.color] : 'var(--muted)'}
-        <div class="group" style="--c:{color}" data-testid="nx-week-group">
-          <a class="ghead" href="/events/{g.event?.id ?? 'other'}">
-            <span style="color:{color}">{g.event?.name ?? 'その他'}</span>
-            {#if g.event}<small>本番まで {Math.max(0, daysUntil(g.event.start_date))}日</small>{/if}
-          </a>
-          {#each g.items as x (x.task.id)}{@render row(x, false)}{/each}
+        {@const over = g.items.filter((x) => x.over).length}
+        <div class="group" class:open={open[g.key]} style="--c:{color}" data-testid="nx-week-group">
+          <div class="ghead">
+            <button class="gtoggle" onclick={() => toggle(g.key)} aria-expanded={!!open[g.key]} data-testid="nx-week-group-toggle">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+              <span class="gname" style="color:{color}">{g.event?.name ?? 'その他'}</span>
+              {#if g.event}<small>本番まで {Math.max(0, daysUntil(g.event.start_date))}日</small>{/if}
+              <span class="counts">
+                {#if g.items.length}<b>締切 {g.items.length}件</b>{/if}
+                {#if over}<b class="over">期限切れ {over}</b>{/if}
+                {#if g.soon.length}<b class="soon-n">もうすぐ着手 {g.soon.length}件</b>{/if}
+              </span>
+            </button>
+            <a class="go" href="/events/{g.event?.id ?? 'other'}" aria-label="{g.event?.name ?? 'その他'}を開く">開く</a>
+          </div>
+          {#if open[g.key]}
+            <div class="gbody" transition:slide={{ duration: 220 }}>
+              {#if g.items.length}
+                <div class="sect" data-testid="nx-week-due-list">
+                  <span class="sh">締切が1か月以内</span>
+                  {#each g.items as x (x.task.id)}{@render row(x, false)}{/each}
+                </div>
+              {/if}
+              {#if g.soon.length}
+                <div class="sect" data-testid="nx-week-soon-list">
+                  <span class="sh">着手目安日が{SOON_DAYS === 7 ? '1週間' : `${SOON_DAYS}日`}以内の未着手</span>
+                  {#each g.soon as x (x.task.id)}{@render row(x, false, true)}{/each}
+                </div>
+              {/if}
+            </div>
+          {/if}
         </div>
       {/each}
     </div>
@@ -93,11 +141,24 @@
   .seg button { height: 28px; padding: 0 12px; border-radius: 8px; font-size: 12px; font-weight: 700; color: var(--sub); }
   .seg button.on { color: var(--text); background: var(--hi); }
   .empty { margin: 0; padding: 10px 4px; font-size: 13px; color: var(--sub); }
-  .groups { display: flex; flex-direction: column; gap: 14px; }
-  .group { padding: 10px 12px 2px 14px; border-radius: 12px; background: var(--card); box-shadow: inset 3px 0 0 var(--c); }
-  .ghead { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; font-size: 13px; font-weight: 800; }
-  .ghead small { font-size: 11.5px; font-weight: 500; color: var(--muted); }
-  .ghead:hover span { text-decoration: underline; text-underline-offset: 3px; }
+  .groups { display: flex; flex-direction: column; gap: 8px; }
+  .group { padding: 4px 10px 4px 12px; border-radius: 12px; background: var(--card); box-shadow: inset 3px 0 0 var(--c); }
+  .ghead { display: flex; align-items: center; gap: 8px; }
+  .gtoggle { flex: 1; min-width: 0; min-height: 44px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; text-align: left; font-size: 13.5px; font-weight: 800; }
+  .gtoggle svg { flex: none; width: 13px; height: 13px; fill: none; stroke: var(--muted); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.2s; }
+  .group.open .gtoggle svg { transform: rotate(90deg); }
+  .gtoggle small { font-size: 11.5px; font-weight: 500; color: var(--muted); }
+  .counts { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+  .counts b { height: 22px; padding: 0 8px; border-radius: 999px; display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; color: var(--sub); background: var(--chip); }
+  .counts b.over { color: var(--over-text); background: rgba(255, 107, 91, 0.12); }
+  .counts b.soon-n { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .go { flex: none; height: 28px; padding: 0 10px; border-radius: 8px; display: inline-flex; align-items: center; font-size: 11.5px; font-weight: 700; color: var(--muted); }
+  .go:hover { color: var(--text); background: var(--hi); }
+  .gbody { display: flex; flex-direction: column; gap: 6px; padding: 0 0 6px 21px; }
+  .sh { display: block; padding: 6px 0 2px; font-size: 11.5px; font-weight: 800; color: var(--muted); }
+  .sect .row:last-child { border-bottom: 0; }
+  .soon { flex: none; height: 24px; padding: 0 9px; border-radius: 999px; display: inline-flex; align-items: center; font-size: 11.5px; font-weight: 700; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .soon.over { color: var(--over-text); background: rgba(255, 107, 91, 0.12); }
   .row { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 4px; border-bottom: 1px solid var(--line); }
   .group .row:last-child { border-bottom: 0; }
   .check { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--muted); transition: background 0.2s, border-color 0.2s; }

@@ -44,7 +44,7 @@ test('on opening, a 未着手 task whose start day has come is 進行中 — unl
   expect((await stored(page, 'back')).status).toBe('todo');
   expect((await stored(page, 'later')).status).toBe('todo');
   // the card shows when to start while it waits
-  await expect(page.getByTestId('nx-card').filter({ hasText: 'まだ先の作業' }).getByTestId('nx-card-start')).toHaveText(`${md(plus(5))}〜`);
+  await expect(page.getByTestId('nx-card').filter({ hasText: 'まだ先の作業' }).getByTestId('nx-card-start')).toHaveText('あと5日'); // within a week: counted down
 });
 
 test('the add form takes 締切日・時刻 and 着手目安日 (all optional) for what it adds', async ({ page }) => {
