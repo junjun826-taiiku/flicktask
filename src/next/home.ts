@@ -86,8 +86,13 @@ export function startingSoon(tasks: Task[], eventById: (id: string | null) => FE
 }
 /** items = 締切が1か月以内, soon = 着手目安日が1週間以内の未着手 */
 export type WeekGroup = { key: string; event: FEvent | null; items: WeekItem[]; soon: WeekItem[] };
-/** Group by event in sidebar order; tasks with no event go last under 「その他」. */
+/** Group by event in sidebar order; tasks with no event go last under 「その他」.
+ *  A task in both lists shows once: under 着手 (with its deadline alongside), unless its deadline has passed — then under 締切. */
 export function byEvent(items: WeekItem[], order: FEvent[], soon: WeekItem[] = []): WeekGroup[] {
+  const overdue = new Set(items.filter((x) => x.over).map((x) => x.task.id));
+  soon = soon.filter((x) => !overdue.has(x.task.id));
+  const starting = new Set(soon.map((x) => x.task.id));
+  items = items.filter((x) => !starting.has(x.task.id));
   const mine = (list: WeekItem[], e: FEvent) => list.filter((x) => x.event?.id === e.id);
   const rest = (list: WeekItem[]) => list.filter((x) => !x.event || !order.some((e) => e.id === x.event!.id));
   const groups: WeekGroup[] = order.map((e) => ({ key: e.id, event: e, items: mine(items, e), soon: mine(soon, e) }));

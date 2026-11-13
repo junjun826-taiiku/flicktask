@@ -119,6 +119,7 @@ test.describe('new home', () => {
           { ...base, id: 'w3', title: '再来月の準備', event_id: 'ev2', due_date: p.d45 },
           { ...base, id: 'w5', title: '3週間後の締切', event_id: 'ev2', due_date: p.d20 },
           { ...base, id: 'w6', title: '看板の制作', event_id: 'ev2', due_date: p.d45, start_on: p.d3 }, // starts soon, due beyond the month
+          { ...base, id: 'w7', title: 'ビラの印刷', event_id: 'ev2', due_date: p.d20, start_on: p.d3 }, // both lists: shown once, under 着手
           { ...base, id: 'w4', title: '個人の締切', event_id: null, due_date: p.today },
           { ...base, id: 's1', title: '幹部読み合わせ', kind: 'event', event_id: 'ev1', plan_date: p.d1, plan_start: '19:00', tag: '幹部読み合わせ' },
         );
@@ -135,7 +136,7 @@ test.describe('new home', () => {
     await expect(rows).toHaveCount(2);
     const obog = rows.filter({ hasText: '2026 OBOG総会' });
     // w1 is overdue (2 days ago); it is drawn red unless it falls before this week's Monday
-    await expect(rows.filter({ hasText: '津田沼祭' }).getByTestId('nx-tl-due')).toHaveCount(4);
+    await expect(rows.filter({ hasText: '津田沼祭' }).getByTestId('nx-tl-due')).toHaveCount(5);
     await obog.click();
     await expect(page).toHaveURL(/\/events\/ev1$/);
     await expect(page.getByTestId('nx-event-title')).toContainText('2026 OBOG総会');
@@ -154,14 +155,18 @@ test.describe('new home', () => {
     await expect(groups.nth(0)).toContainText('期限切れ 1');
     await expect(week.getByTestId('nx-week-row')).toHaveCount(0);
     await expect(groups.nth(1)).toContainText('締切 2件');
-    await expect(groups.nth(1)).toContainText('もうすぐ着手 1件');
+    await expect(groups.nth(1)).toContainText('もうすぐ着手 2件');
     await expect(groups.nth(2)).toContainText('その他');
     // open 津田沼祭: two lists
     await groups.nth(1).getByTestId('nx-week-group-toggle').click();
     await expect(groups.nth(1).getByTestId('nx-week-due-list')).toContainText('3週間後の締切'); // within the month
     await expect(groups.nth(1).getByTestId('nx-week-soon-list')).toContainText('看板の制作');
-    await expect(groups.nth(1).getByTestId('nx-week-soon-row')).toContainText('あと3日');
+    await expect(groups.nth(1).getByTestId('nx-week-soon-row').filter({ hasText: '看板の制作' })).toContainText('あと3日');
     await expect(groups.nth(1).getByTestId('nx-week-due-list')).not.toContainText('看板の制作'); // its deadline is beyond the month
+    // a task in both lists shows once, under 着手, with its deadline alongside
+    await expect(groups.nth(1).getByTestId('nx-week-due-list')).not.toContainText('ビラの印刷');
+    await expect(groups.nth(1).getByTestId('nx-week-soon-row').filter({ hasText: 'ビラの印刷' })).toContainText('締切');
+    await expect(groups.nth(1).getByRole('link', { name: /開く/ })).toHaveCount(0);
     await expect(week).not.toContainText('再来月の準備'); // beyond a month
     // the open group is remembered; tapping again folds it
     await page.reload();

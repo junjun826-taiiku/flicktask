@@ -70,6 +70,7 @@
     {/if}
     {#if starting}
       <span class="soon" class:over={x.over}>{soonLabel(x.date, today)}</span>
+      {#if x.task.due_date}<span class="due" title="締切">締切 {md(x.task.due_date)}</span>{/if}
     {:else}
       <span class="due" class:over={x.over}>{dueLabel(x)}</span>
     {/if}
@@ -104,7 +105,6 @@
                 {#if g.soon.length}<b class="soon-n">もうすぐ着手 {g.soon.length}件</b>{/if}
               </span>
             </button>
-            <a class="go" href="/events/{g.event?.id ?? 'other'}" aria-label="{g.event?.name ?? 'その他'}を開く">開く</a>
           </div>
           {#if open[g.key]}
             <div class="gbody" transition:slide={{ duration: 220 }}>
@@ -152,8 +152,6 @@
   .counts b { height: 22px; padding: 0 8px; border-radius: 999px; display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; color: var(--sub); background: var(--chip); }
   .counts b.over { color: var(--over-text); background: rgba(255, 107, 91, 0.12); }
   .counts b.soon-n { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
-  .go { flex: none; height: 28px; padding: 0 10px; border-radius: 8px; display: inline-flex; align-items: center; font-size: 11.5px; font-weight: 700; color: var(--muted); }
-  .go:hover { color: var(--text); background: var(--hi); }
   .gbody { display: flex; flex-direction: column; gap: 6px; padding: 0 0 6px 21px; }
   .sh { display: block; padding: 6px 0 2px; font-size: 11.5px; font-weight: 800; color: var(--muted); }
   .sect .row:last-child { border-bottom: 0; }
