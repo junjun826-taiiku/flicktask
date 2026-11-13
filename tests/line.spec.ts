@@ -76,6 +76,45 @@ test.describe('LINE bot @local', () => {
     expect((await (await page.request.get('/api/line')).json()).links).toHaveLength(0);
   });
 
+  test('an event name (or part of it) gets that event: 進行中 due within a week and 未着手 starting within a week, with who', async ({ page }) => {
+    await signIn(page);
+    const now = Date.now();
+    const ev = { id: crypto.randomUUID(), name: '2027 成田山詣行脚', start_date: ymd(60), end_date: ymd(61), color: 'red', created_at: now, updated_at: now };
+    const twin = { id: crypto.randomUUID(), name: '2027 書類研修会', start_date: ymd(20), end_date: ymd(20), color: 'green', created_at: now, updated_at: now };
+    const twin2 = { ...twin, id: crypto.randomUUID(), name: '2027 書類研修会（後期）' };
+    const t = (o: object) => ({ id: crypto.randomUUID(), status: 'todo', created_at: now, updated_at: now, event_id: ev.id, ...o });
+    const tasks = [
+      t({ title: 'ルート図', status: 'doing', due_date: ymd(5), due_time: '17:00', assignees: ['佐々木'] }),
+      t({ title: '遅れている申請', status: 'doing', due_date: ymd(-1) }),
+      t({ title: '来月の締切', status: 'doing', due_date: ymd(20), assignees: ['鶴岡'] }),
+      t({ title: '未着手で締切近い', status: 'todo', due_date: ymd(3) }), // not 進行中: not in the first list
+      t({ title: '看板の制作', start_on: ymd(4), due_date: ymd(25), assignees: ['鶴岡', '岡本'] }),
+      t({ title: 'まだ先の着手', start_on: ymd(12), due_date: ymd(30) }),
+    ];
+    expect((await page.request.post('/api/tasks/sync', { data: { events: [ev, twin, twin2], tasks } })).status()).toBe(200);
+    const group = `C${uid()}`;
+    const { code } = await (await page.request.post('/api/line/code')).json();
+    await hook(page.request, [say(group, `連携 ${code}`)]);
+
+    const [text] = await replies(await hook(page.request, [say(group, '行脚')]));
+    expect(text).toContain('📌 2027 成田山詣行脚');
+    expect(text).toContain('本番まで60日');
+    expect(text).toContain('締切が1週間以内の進行中（2件）');
+    expect(text).toMatch(/⚠️.*遅れている申請（担当なし）/);
+    expect(text).toContain('17:00 ルート図（担当：佐々木）');
+    expect(text).toContain('着手目安日が1週間以内の未着手（1件）');
+    expect(text).toContain('〜 看板の制作');
+    expect(text).toContain('（担当：鶴岡・岡本）');
+    for (const no of ['来月の締切', '未着手で締切近い', 'まだ先の着手']) expect(text).not.toContain(no);
+    expect(text.indexOf('遅れている申請')).toBeLessThan(text.indexOf('ルート図'));
+
+    // two events match: it asks which; the full name picks one
+    expect((await replies(await hook(page.request, [say(group, '書類研修会')])))[0]).toContain('どのイベントですか');
+    expect((await replies(await hook(page.request, [say(group, '2027 書類研修会')])))[0]).toContain('📌 2027 書類研修会（');
+    // ordinary talk, a single character, and a finished event's name stay quiet
+    for (const quiet of ['行脚の件だけど明日話そう', '行', '2025 部同会']) expect(await replies(await hook(page.request, [say(group, quiet)]))).toEqual([]);
+  });
+
   test('the Monday push goes to linked chats that want it', async ({ page }) => {
     await signIn(page);
     const a = `C${uid()}`, b = `C${uid()}`;

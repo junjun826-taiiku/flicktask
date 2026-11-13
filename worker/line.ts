@@ -11,6 +11,7 @@ export type LineEnv = {
 type Row = {
   id: string; title: string; status: string; kind: string; event_id: string | null; assignees: string;
   due_date: string | null; due_time: string | null; plan_date: string | null; plan_start: string | null; tag: string;
+  start_on?: string | null;
 };
 type Ev = { id: string; name: string; start_date: string; end_date: string; closed: number };
 
@@ -42,7 +43,7 @@ type Item = { t: Row; e: Ev | null; date: string };
 async function load(db: D1Database, userId: string) {
   const [t, e] = await db.batch([
     db.prepare(
-      `SELECT id, title, status, kind, event_id, assignees, due_date, due_time, plan_date, plan_start, tag
+      `SELECT id, title, status, kind, event_id, assignees, due_date, due_time, plan_date, plan_start, tag, start_on
        FROM tasks WHERE user_id = ? AND deleted = 0 AND (status != 'done' OR kind = 'event')`,
     ).bind(userId),
     db.prepare('SELECT id, name, start_date, end_date, closed FROM events WHERE user_id = ? AND deleted = 0 ORDER BY start_date').bind(userId),
@@ -120,9 +121,42 @@ export function weeklyText(tasks: Row[], events: Ev[], today: string, appUrl: st
   return clip(lines, ['', `「やること」と送ると1か月分を返します ▶ ${appUrl}`]);
 }
 
+// ---------- one event: 「行脚」 → that event's coming week ----------
+const squash = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+/** Running events whose name contains the whole message (「行脚」 → 「2027 成田山詣行脚」). An exact name wins over partial ones. */
+export function matchEvents(text: string, events: Ev[]) {
+  const q = squash(text);
+  if ([...q].length < 2) return [];
+  const running = events.filter((e) => !e.closed);
+  const exact = running.filter((e) => squash(e.name) === q);
+  return exact.length ? exact : running.filter((e) => squash(e.name).includes(q));
+}
+const people = (t: Row) => {
+  const w = who(t);
+  return w ? w.replace(/^（(.*)）$/, '（担当：$1）') : '（担当なし）';
+};
+/** 「イベント名」: its 進行中 tasks due within a week (overdue too) and its 未着手 tasks whose start day is within a week, with who does each. */
+export function eventText(tasks: Row[], e: Ev, today: string, appUrl: string) {
+  const week = addDays(today, 7);
+  const mine = tasks.filter((t) => t.event_id === e.id && t.kind === 'task' && !isMove(t, e));
+  const due = mine
+    .filter((t) => t.status === 'doing' && t.due_date && t.due_date <= week)
+    .sort((a, b) => a.due_date!.localeCompare(b.due_date!) || (a.due_time ?? '99').localeCompare(b.due_time ?? '99'));
+  const start = mine.filter((t) => t.status === 'todo' && t.start_on && t.start_on <= week).sort((a, b) => a.start_on!.localeCompare(b.start_on!));
+  const when = e.start_date > today ? ` 本番まで${daysBetween(today, e.start_date)}日` : e.end_date >= today ? ' 本番中' : '';
+  const lines = [`📌 ${e.name}（${md(e.start_date)}）${when}`, '', `▶ 締切が1週間以内の進行中（${due.length}件）`];
+  if (!due.length) lines.push('なし');
+  for (const t of due) lines.push(`${t.due_date! < today ? '⚠️' : '・'}${md(t.due_date!)}${t.due_time ? ` ${t.due_time}` : ''} ${t.title}${people(t)}`);
+  lines.push('', `▶ 着手目安日が1週間以内の未着手（${start.length}件）`);
+  if (!start.length) lines.push('なし');
+  for (const t of start) lines.push(`${t.start_on! < today ? '⚠️' : '・'}${md(t.start_on!)}〜 ${t.title}${t.due_date ? `（締切 ${md(t.due_date)}）` : ''}${people(t)}`);
+  return clip(lines, ['', `▶ ${appUrl}events/${e.id}`]);
+}
+
 export const HELP = [
   'Task本部 ボットの使い方',
   '・「やること」… 期限切れと1か月先までの締切を返します',
+  '・イベント名（例：「行脚」。一部でもOK）… そのイベントの、締切が1週間以内の進行中タスクと、着手目安日が1週間以内の未着手タスクを、担当付きで返します',
   '・「今週」… 今週のまとめを返します',
   '・「連携 123456」… アプリの「LINE連携」で出したコードでつなぎます',
   '・「連携解除」… このトークとの連携をやめます',
@@ -229,6 +263,15 @@ export async function handleWebhook(env: LineEnv, events: LineEvent[], appUrl: s
       const { tasks, events: evs } = await load(env.DB, link.user_id);
       const today = jstToday(now);
       await say(ev, text === 'やること' ? todoText(tasks, evs, today, appUrl) : (weeklyText(tasks, evs, today, appUrl) ?? `🗓 今週の締切と予定はありません\n${appUrl}`));
+      continue;
+    }
+    // a message that is (part of) a running event's name: that event's coming week.
+    // Only in a linked chat and only for a whole-message match, so ordinary talk stays quiet.
+    if (link && text.length <= 40) {
+      const { tasks, events: evs } = await load(env.DB, link.user_id);
+      const hits = matchEvents(text, evs);
+      if (hits.length === 1) await say(ev, eventText(tasks, hits[0], jstToday(now), appUrl));
+      else if (hits.length > 1) await say(ev, `どのイベントですか？もう少し詳しく送ってください。\n${hits.map((e) => `・${e.name}`).join('\n')}`);
     }
     // anything else is ordinary group talk: stay quiet
   }
